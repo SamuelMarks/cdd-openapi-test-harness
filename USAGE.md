@@ -31,9 +31,14 @@ npm run build
 
 The Angular test suite tests the generated output logic:
 ```sh
+cd ..
+npx @angular/cli new angular-client --defaults --skip-git
+cd angular-client
+npx ng add @angular/material --skip-confirmation
+cd ../cdd-web-ng
+node dist/cli.js from_openapi -i ../petstore.json --output ../angular-client/src/app/api
 cd ../angular-client
-npm install
-npm run test -- --include="**/integration.spec.ts" --watch=false
+npm run test -- --watch=false
 ```
 
 ### Running the Kotlin Generation Tests (`cdd-kotlin`)

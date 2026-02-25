@@ -40,6 +40,11 @@ jobs:
             npm i
           fi
           npm run build
+          cd ..
+          npx -p @angular/cli ng new angular-client --defaults --skip-git
+          cd angular-client
+          npx ng add @angular/material --skip-confirmation
+          cd ../cdd-web-ng
           node dist/cli.js from_openapi -i ../petstore.json --output ../angular-client/src/app/api
 
       - name: Install dependencies and run tests for Angular client
@@ -50,7 +55,7 @@ jobs:
           else
             npm i
           fi
-          npm run test -- --include="**/integration.spec.ts" --watch=false
+          npm run test -- --watch=false
 
   kotlin-integration:
     runs-on: ubuntu-latest
@@ -75,16 +80,19 @@ jobs:
           java-version: '21'
           cache: 'gradle'
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+
       - name: Build and Run Kotlin Generator
         working-directory: cdd-kotlin
         run: |
-          gradlew run --args="from_openapi -i ../petstore.json --clientName MyGeneratedClient --output ../kotlin-client --dateType string"
+          ./gradlew run --args="from_openapi -i ../petstore.json --clientName MyGeneratedClient --output ../kotlin-client --dateType string"
 
       - name: Copy Kotlin Integration Tests
         run: |
           mkdir -p kotlin-client/composeApp/src/commonTest/kotlin/com/example/auto
-          cp kotlin-integration.kt kotlin-client/composeApp/src/commonTest/kotlin/com/example/auto/IntegrationTest.kt
+          cp cdd-kotlin/tests/integration/kotlin-integration.kt kotlin-client/composeApp/src/commonTest/kotlin/com/example/auto/IntegrationTest.kt
 
       - name: Test Kotlin Client
         working-directory: kotlin-client
-        run: gradlew test
+        run: ./gradlew test
