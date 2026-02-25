@@ -1,3 +1,11 @@
-.idea
-apache-*
-*.gz
+# Project-specific ignores
+angular-client/
+kotlin-client/
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+
+# OS files
+.DS_Store
