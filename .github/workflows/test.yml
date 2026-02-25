@@ -1,0 +1,85 @@
+name: Cross-Language Test Suite
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  angular-integration:
+    runs-on: ubuntu-latest
+    services:
+      petstore_server:
+        image: swaggerapi/petstore
+        ports:
+          - "8080:8080"
+        env:
+          SWAGGER_HOST: "http://localhost:8080"
+          SWAGGER_BASE_PATH: "/v2"
+
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 'lts/*'
+          cache: 'npm'
+          cache-dependency-path: 'angular-client/package-lock.json'
+
+      - name: Install dependencies and build cdd-web-ng
+        working-directory: cdd-web-ng
+        run: |
+          npm ci
+          npm run build
+          node dist/cli.js from_openapi -i ../petstore.json --output ../angular-client/src/app/api
+
+      - name: Install dependencies and run tests for Angular client
+        working-directory: angular-client
+        run: |
+          npm ci
+          npm run test -- --include="**/integration.spec.ts" --watch=false
+
+  kotlin-integration:
+    runs-on: ubuntu-latest
+    services:
+      petstore_server:
+        image: swaggerapi/petstore
+        ports:
+          - "8080:8080"
+        env:
+          SWAGGER_HOST: "http://localhost:8080"
+          SWAGGER_BASE_PATH: "/v2"
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Build and Run Kotlin Generator
+        working-directory: cdd-kotlin
+        run: |
+          chmod +x gradlew
+          ./gradlew run --args="from_openapi -i ../petstore.json --clientName MyGeneratedClient --output ../kotlin-client --dateType string"
+
+      - name: Copy Kotlin Integration Tests
+        run: |
+          mkdir -p kotlin-client/composeApp/src/commonTest/kotlin/com/example/auto
+          cp kotlin-integration.kt kotlin-client/composeApp/src/commonTest/kotlin/com/example/auto/IntegrationTest.kt
+
+      - name: Test Kotlin Client
+        working-directory: kotlin-client
+        run: |
+          chmod +x gradlew
+          ./gradlew test
