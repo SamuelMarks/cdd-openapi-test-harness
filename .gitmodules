@@ -4,6 +4,3 @@
 [submodule "cdd-kotlin"]
 	path = cdd-kotlin
 	url = https://github.com/offscale/cdd-kotlin.git
-[submodule "openapi-petstore"]
-	path = openapi-petstore
-	url = https://github.com/OpenAPITools/openapi-petstore.git
