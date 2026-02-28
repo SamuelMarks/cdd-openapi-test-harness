@@ -1,0 +1,199 @@
+name: cdd-roundtrip-tests
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  roundtrip-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 'lts/*'
+          cache: 'npm'
+          cache-dependency-path: 'cdd-web-ng/package-lock.json'
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Setup Rust nightly
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+
+      - name: Setup Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: '5.9'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install dependencies and build cdd-web-ng
+        working-directory: cdd-web-ng
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm i
+          fi
+          npm run build
+
+      - name: Run Roundtrip Tests for all submodules
+        run: |
+          set -e
+          
+          echo "==================================="
+          echo "Running CDD Web NG Roundtrip Tests"
+          echo "==================================="
+          for file in OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+              filename=$(basename "$file")
+              echo "Testing $filename with cdd-web-ng..."
+              node cdd-web-ng/dist/cli.js from_openapi -i "$file" --output temp-ng
+              node cdd-web-ng/dist/cli.js to_openapi -f temp-ng --format yaml > temp-ng-spec.yaml
+              rm -rf temp-ng temp-ng-spec.yaml
+          done
+
+          echo "==================================="
+          echo "Running CDD Kotlin Roundtrip Tests"
+          echo "==================================="
+          for file in OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+              filename=$(basename "$file")
+              echo "Testing $filename with cdd-kotlin..."
+              cd cdd-kotlin
+              ./gradlew run --args="from_openapi -i ../$file --clientName TestClient --output ../temp-kt"
+              ./gradlew run --args="to_openapi -f ../temp-kt --format yaml" > ../temp-kt-spec.yaml
+              cd ..
+              rm -rf temp-kt temp-kt-spec.yaml
+          done
+
+          echo "==================================="
+          echo "Running CDD Rust Scaffold Tests"
+          echo "==================================="
+          for file in OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+              filename=$(basename "$file")
+              echo "Testing $filename with cdd-rust..."
+              cd cdd-rust
+              cargo run -p cdd-cli -- scaffold --openapi-path "../$file" --output-dir "../temp-rs/src/handlers"
+              cargo run -p cdd-cli -- test-gen --openapi-path "../$file" --output-path "../temp-rs/tests/api_contracts.rs" --app-factory "crate::create_app"
+              cd ..
+              rm -rf temp-rs
+          done
+
+          echo "All roundtrip tests completed successfully!"
+
+      - name: Install and run CDD Python Client Roundtrip Tests
+        run: |
+          set -e
+          echo "==================================="
+          echo "Running CDD Python Client Tests"
+          echo "==================================="
+          cd cdd-python-client
+          pip install pyyaml
+          pip install -e .
+          for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+              filename=$(basename "$file")
+              echo "Testing $filename with cdd-python-client..."
+              mkdir -p temp-py
+              python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-py-spec.json
+              cdd sync --from-openapi temp-py-spec.json --to-python temp-py/
+              cdd sync --dir temp-py/
+              rm -rf temp-py temp-py-spec.json
+          done
+          cd ..
+
+      - name: Build and run CDD Swift Roundtrip Tests
+        run: |
+          set -e
+          echo "==================================="
+          echo "Running CDD Swift Roundtrip Tests"
+          echo "==================================="
+          cd cdd-swift
+          swift build -c release
+          for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+              filename=$(basename "$file")
+              echo "Testing $filename with cdd-swift..."
+              # Convert YAML to JSON (assuming python and pyyaml are still in the environment)
+              python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-swift-spec.json
+              .build/release/cdd-swift generate-swift temp-swift-spec.json -o temp-swift.swift
+              .build/release/cdd-swift parse-swift temp-swift.swift -o temp-swift-out.json
+              rm -f temp-swift-spec.json temp-swift.swift temp-swift-out.json
+          done
+          cd ..
+
+          echo "==================================="
+          echo "Running CDD Shell Roundtrip Tests"
+          echo "==================================="
+          cd cdd-sh
+          for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+              filename=$(basename "$file")
+              echo "Testing $filename with cdd-sh..."
+              python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-sh-spec.json
+              ./cdd.sh parse openapi temp-sh-spec.json
+              ./cdd.sh emit routes temp-routes.sh
+              ./cdd.sh parse routes temp-routes.sh
+              ./cdd.sh emit openapi temp-sh-out.json
+              rm -f temp-sh-spec.json temp-routes.sh temp-sh-out.json ast.json
+          done
+          cd ..
+
+          echo "==================================="
+          echo "Running CDD Go Roundtrip Tests"
+          echo "==================================="
+          cd cdd-go
+          for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+              filename=$(basename "$file")
+              echo "Testing $filename with cdd-go..."
+              python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-go-spec.json
+              go run ./cmd/cdd_go from_openapi -i temp-go-spec.json -o temp-go
+              go run ./cmd/cdd_go to_openapi -i temp-go -o temp-go-out.json
+              rm -rf temp-go-spec.json temp-go temp-go-out.json
+          done
+          cd ..
+
+          echo "==================================="
+          echo "Running CDD C# Roundtrip Tests"
+          echo "==================================="
+          cd cdd-csharp
+          for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+              filename=$(basename "$file")
+              echo "Testing $filename with cdd-csharp..."
+              python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-cs-spec.json
+              dotnet run --project src/Cdd.OpenApi.Cli -- from_openapi -i temp-cs-spec.json -o temp-cs
+              dotnet run --project src/Cdd.OpenApi.Cli -- to_openapi -i temp-cs -o temp-cs-out.json
+              rm -rf temp-cs-spec.json temp-cs temp-cs-out.json
+          done
+          cd ..
+
+          echo "All roundtrip tests completed successfully for all clients!"

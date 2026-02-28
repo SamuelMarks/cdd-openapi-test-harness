@@ -96,3 +96,55 @@ jobs:
       - name: Test Kotlin Client
         working-directory: kotlin-client
         run: ./gradlew test
+
+  go-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+      - name: Run Go Tests
+        working-directory: cdd-go
+        run: go test -v -coverprofile=coverage.out ./...
+
+  csharp-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build and Test C#
+        working-directory: cdd-csharp
+        run: |
+          dotnet restore
+          dotnet build --no-restore
+          dotnet test tests/Cdd.OpenApi.Tests --no-build
+
+  sh-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl shellcheck
+      - name: Run Test Suite
+        working-directory: cdd-sh
+        run: ./test.sh
+      - name: Verify Shellcheck
+        working-directory: cdd-sh
+        run: shellcheck cdd.sh src/*/*.sh
