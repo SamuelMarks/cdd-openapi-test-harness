@@ -1,6 +1,8 @@
+emsdk
 # Project-specific ignores
 angular-client/
 kotlin-client/
+temp*
 
 # IDE files
 .idea/

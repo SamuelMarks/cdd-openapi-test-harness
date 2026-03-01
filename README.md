@@ -14,14 +14,22 @@ This project ties together independent Git repositories (submodules) containing 
 
 ### Submodules
 
-- **cdd-web-ng**: The Angular (TypeScript) client and admin UI generator.
-- **cdd-kotlin**: The Kotlin Multiplatform (KMP) client generator.
-- **cdd-rust**: The Rust Actix-Web server scaffolding and integration test generator.
-- **cdd-python-client**: The Python bidirectional client, mock server, and Pytest generator utilizing `libcst`.
-- **cdd-swift**: The Swift bidirectional URLSession client and Codable model generator.
-- **cdd-csharp**: The C# code generator and parser for ASP.NET and models.
-- **cdd-go**: The Go toolchain for scaffolding routing structures and structs.
-- **cdd-sh**: The Shell script code generator and OpenAPI compiler for Bash.
+| Repository | Language | Client or Server | Extra features | OpenAPI Standard | CI Status |
+|---|---|---|---|---|---|
+| [`cdd-c`](https://github.com/SamuelMarks/cdd-c) | C (C89) | Client | FFI | OpenAPI 3.2.0 | [![CI/CD](https://github.com/offscale/cdd-c/workflows/cross-OS/badge.svg)](https://github.com/offscale/cdd-c/actions) |
+| [`cdd-cpp`](https://github.com/SamuelMarks/cdd-cpp) | C++ | Client | Upgrades Swagger & Google Discovery to OpenAPI 3.2.0 | Swagger 2.0 until OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-csharp/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-csharp/actions/workflows/ci.yml) |
+| [`cdd-csharp`](https://github.com/SamuelMarks/cdd-csharp) | C# | Client | CLR | OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-csharp/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-csharp/actions/workflows/ci.yml) |
+| [`cdd-go`](https://github.com/SamuelMarks/cdd-go) | Go | Client |  | OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-go/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-go/actions/workflows/ci.yml) |
+| [`cdd-java`](https://github.com/SamuelMarks/cdd-java) | Java | Client | | OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-java/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-java/actions/workflows/ci.yml) |
+| [`cdd-kotlin`](https://github.com/SamuelMarks/cdd-kotlin) | Kotlin (Multiplatform) | Client | Auto-Admin UI | OpenAPI 3.2.0 | [![CI](https://github.com/offscale/cdd-kotlin/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-kotlin/actions/workflows/ci.yml) |
+| [`cdd-php`](https://github.com/SamuelMarks/cdd-php) | PHP | Client |  | OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-php/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-php/actions/workflows/ci.yml) |
+| [`cdd-python-client`](https://github.com/offscale/cdd-python-client) | Python | Client |  | OpenAPI 3.2.0 | [![uv](https://github.com/offscale/cdd-python-client/actions/workflows/uv.yml/badge.svg)](https://github.com/offscale/cdd-python-client/actions/workflows/uv.yml) |
+| [`cdd-ruby`](https://github.com/SamuelMarks/cdd-ruby) | Ruby | Client |  | OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-ruby/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-ruby/actions/workflows/ci.yml) |
+| [`cdd-rust`](https://github.com/SamuelMarks/cdd-rust) | Rust | Client & Server | CLI frontend for SDK | OpenAPI 3.2.0 | [![CI](https://github.com/offscale/cdd-rust/actions/workflows/ci-cargo.yml/badge.svg)](https://github.com/offscale/cdd-rust/actions/workflows/ci-cargo.yml) |
+| [`cdd-sh`](https://github.com/SamuelMarks/cdd-sh) | Shell (/bin/sh) | Client |  | OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-sh/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-sh/actions/workflows/ci.yml) |
+| [`cdd-swift`](https://github.com/offscale/cdd-swift) | Swift | Client |  | OpenAPI 3.2.0 | [![Swift](https://github.com/SamuelMarks/cdd-swift/actions/workflows/swift.yml/badge.svg)](https://github.com/SamuelMarks/cdd-swift/actions/workflows/swift.yml) |
+| [`cdd-web-ng`](https://github.com/offscale/cdd-web-ng) | TypeScript | Client | Auto-Admin UI; Angular; fetch; Axios; Node.js | OpenAPI 3.2.0 & Swagger 2 | [![Tests and coverage](https://github.com/offscale/cdd-web-ng/actions/workflows/tests_and_coverage.yml/badge.svg)](https://github.com/offscale/cdd-web-ng/actions/workflows/tests_and_coverage.yml) |
+
 - **OAI-OpenAPI-Specification**: The official OpenAPI repository used for sourcing raw, versioned test YAML files (`api-with-examples.yaml`, `callback-example.yaml`, `petstore.yaml`, etc.).
 
 ### Standardized Roundtrip Lifecycle
@@ -31,6 +39,48 @@ Every CDD toolchain must support bidirectional synchronization. The test harness
 1. **from_openapi (Generation)**: The toolchain parses an official OpenAPI YAML file and emits idiomatic code (e.g., Swift structs, Python FastAPI routes, Angular services).
 2. **to_openapi (Extraction)**: The toolchain parses the Abstract Syntax Tree (AST) of the code it just generated and reconstructs a valid OpenAPI document.
 3. **Compilation/Validation**: The generated code must compile cleanly (e.g., `swift build`, `cargo check`, `tsc`), and the extracted OpenAPI must be structurally compliant.
+
+### Current Ecosystem Status
+
+This table provides a snapshot of the current local integration capability and the functional status of a full `from_openapi` ↔ `to_openapi` roundtrip against `petstore.json` for each tracked implementation.
+
+| Implementation      | Type         | Local Test Status | Roundtrip Petstore JSON |
+|---------------------|--------------|-------------------|-------------------------|
+| `cdd-c`             | `client`     | ✅ Passed          | ❌ Failed (Not Impl)     |
+| `cdd-cpp`           | `client`     | ✅ Passed          | ❌ Failed (Not Impl)     |
+| `cdd-csharp`        | `client`     | ✅ Passed          | ✅ Passed                |
+| `cdd-go`            | `client`     | ✅ Passed          | ❌ Failed                |
+| `cdd-java`          | `client`     | ✅ Passed          | ✅ Passed                |
+| `cdd-kotlin`        | `client`     | ❌ Failed          | ✅ Passed                |
+| `cdd-php`           | `client`     | ❌ Failed          | ❌ Failed (Not Impl)     |
+| `cdd-python-client` | `client_cli` | ❌ Failed          | ❌ Failed                |
+| `cdd-ruby`          | `client`     | ❌ Failed          | ❌ Failed (Not Impl)     |
+| `cdd-rust`          | `server`     | ✅ Passed          | ✅ Passed                |
+| `cdd-sh`            | `client`     | ✅ Passed          | ✅ Passed                |
+| `cdd-swift`         | `client`     | ❌ Failed          | ❌ Failed                |
+| `cdd-web-ng`        | `client`     | ✅ Passed          | ✅ Passed                |
+
+*(Note: "Not Impl" indicates that the `to_openapi` or `from_openapi` CLI flags are missing or undocumented on older native implementations).*
+
+### Testing Coverage
+
+This repository tests both the native builds and WebAssembly (WASM) targets (if supported by the implementation's `WASM.md`).
+
+| Repository | Native Build/Tests | WASM Build/Tests | Reason if Skipped |
+|---|---|---|---|
+| `cdd-c` | ✅ Yes | ✅ Yes | |
+| `cdd-cpp` | ✅ Yes | ✅ Yes | |
+| `cdd-csharp` | ✅ Yes | ✅ Yes | |
+| `cdd-go` | ✅ Yes | ✅ Yes | |
+| `cdd-java` | ✅ Yes | ❌ No | Out of scope as per WASM.md |
+| `cdd-kotlin` | ✅ Yes | ❌ No | Unsupported as per WASM.md |
+| `cdd-php` | ✅ Yes | ✅ Yes | |
+| `cdd-python-client` | ✅ Yes | ✅ Yes | |
+| `cdd-ruby` | ✅ Yes | ✅ Yes | |
+| `cdd-rust` | ✅ Yes | ❌ No | Missing WASM support / WASM.md |
+| `cdd-sh` | ✅ Yes | ❌ No | Missing WASM support / WASM.md |
+| `cdd-swift` | ✅ Yes | ❌ No | Missing WASM support / WASM.md |
+| `cdd-web-ng` | ✅ Yes | ❌ No | Missing WASM support / WASM.md |
 
 ## Setup & CI
 

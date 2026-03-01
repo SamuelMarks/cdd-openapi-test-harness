@@ -1,6 +1,57 @@
 #!/bin/sh
 set -e
 
+IGNORE_TESTS="${IGNORE_TESTS:-}"
+ONLY_TEST="${ONLY_TEST:-}"
+TARGET_TYPE="${TARGET_TYPE:-all}"
+
+is_client() {
+    case "$1" in
+        cdd-c|cdd-cpp|cdd-csharp|cdd-go|cdd-java|cdd-kotlin|cdd-php|cdd-python-client|cdd-ruby|cdd-rust|cdd-sh|cdd-swift|cdd-web-ng) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+is_server() {
+    case "$1" in
+        cdd-rust) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+should_run() {
+    local module=$1
+
+    if [ -n "$ONLY_TEST" ]; then
+        if echo "$ONLY_TEST" | tr ',' '
+' | grep -q "^${module}$"; then
+            return 0
+        else
+            return 1
+        fi
+    fi
+
+    if [ -n "$IGNORE_TESTS" ] && echo "$IGNORE_TESTS" | tr ',' '
+' | grep -q "^${module}$"; then
+        echo "Skipping $module (in IGNORE_TESTS)"
+        return 1
+    fi
+    
+    if [ "$TARGET_TYPE" = "client" ] && ! is_client "$module"; then
+        echo "Skipping $module (not a client)"
+        return 1
+    fi
+
+    if [ "$TARGET_TYPE" = "server" ] && ! is_server "$module"; then
+        echo "Skipping $module (not a server)"
+        return 1
+    fi
+
+    return 0
+}
+
+
+
 cleanup() {
     if command -v docker >/dev/null 2>&1; then
         if docker ps -q --filter "name=petstore_server" | grep -q .; then
@@ -15,6 +66,7 @@ trap cleanup EXIT
 start_petstore() {
     if command -v docker >/dev/null 2>&1; then
         echo "Starting petstore server via docker..."
+        docker rm -f petstore_server >/dev/null 2>&1 || true
         docker run -d -p 8080:8080 -e SWAGGER_HOST="http://localhost:8080" -e SWAGGER_BASE_PATH="/v2" --name petstore_server swaggerapi/petstore >/dev/null
         sleep 3
     else
@@ -22,8 +74,62 @@ start_petstore() {
     fi
 }
 
-run_test() {
+setup_emsdk() {
+    if [ ! -d "emsdk" ]; then
+        echo "Setting up emsdk..."
+        git clone https://github.com/emscripten-core/emsdk.git
+        cd emsdk
+        ./emsdk install latest
+        ./emsdk activate latest
+        cd ..
+    fi
+}
+
+run_wasm_builds() {
     echo "==================================="
+    echo "Running WASM Builds"
+    echo "==================================="
+    setup_emsdk
+    
+    if should_run "cdd-c"; then
+        echo "Building WASM for cdd-c..."
+        (cd cdd-c && make build_wasm)
+    fi
+    
+    if should_run "cdd-cpp"; then
+        echo "Building WASM for cdd-cpp..."
+        (cd cdd-cpp && make build_wasm)
+    fi
+    
+    if should_run "cdd-csharp"; then
+        echo "Building WASM for cdd-csharp..."
+        (cd cdd-csharp && make build_wasm)
+    fi
+    
+    if should_run "cdd-go"; then
+        echo "Building WASM for cdd-go..."
+        (cd cdd-go && make build_wasm)
+    fi
+    
+    if should_run "cdd-php"; then
+        echo "Building WASM for cdd-php..."
+        (cd cdd-php && make build_wasm)
+    fi
+    
+    if should_run "cdd-python-client"; then
+        echo "Building WASM for cdd-python-client..."
+        (cd cdd-python-client && make build_wasm)
+    fi
+    
+    if should_run "cdd-ruby"; then
+        echo "Building WASM for cdd-ruby..."
+        (cd cdd-ruby && make build_wasm)
+    fi
+}
+
+run_test() {
+    if should_run "cdd-web-ng"; then
+        echo "==================================="
     echo "Running cdd-web-ng (Angular Integration) tests"
     echo "==================================="
     (
@@ -50,8 +156,10 @@ run_test() {
         fi
         npm run test -- --watch=false
     )
+    fi
 
-    echo "==================================="
+    if should_run "cdd-kotlin"; then
+        echo "==================================="
     echo "Running cdd-kotlin tests"
     echo "==================================="
     (
@@ -65,16 +173,20 @@ run_test() {
         cd ../kotlin-client
         ./gradlew test
     )
+    fi
 
-    echo "==================================="
+    if should_run "cdd-go"; then
+        echo "==================================="
     echo "Running cdd-go tests"
     echo "==================================="
     (
         cd cdd-go
         go test -v -coverprofile=coverage.out ./...
     )
+    fi
 
-    echo "==================================="
+    if should_run "cdd-csharp"; then
+        echo "==================================="
     echo "Running cdd-csharp tests"
     echo "==================================="
     (
@@ -83,19 +195,103 @@ run_test() {
         dotnet build --no-restore
         dotnet test tests/Cdd.OpenApi.Tests --no-build
     )
+    fi
 
     echo "==================================="
-    echo "Running cdd-sh tests"
+    if should_run "cdd-python-client"; then
+        echo "==================================="
+        echo "Running cdd-python-client tests"
+        echo "==================================="
+        (
+            cd cdd-python-client
+            make test
+        )
+    fi
+
+    if should_run "cdd-rust"; then
+        echo "==================================="
+        echo "Running cdd-rust tests"
+        echo "==================================="
+        (
+            cd cdd-rust
+            cargo test
+        )
+    fi
+
+    if should_run "cdd-swift"; then
+        echo "==================================="
+        echo "Running cdd-swift tests"
+        echo "==================================="
+        (
+            cd cdd-swift
+            swift test
+        )
+    fi
+
+    if should_run "cdd-c"; then
+        echo "==================================="
+        echo "Running cdd-c tests"
+        echo "==================================="
+        (
+            cd cdd-c
+            make test
+        )
+    fi 
+
+    if should_run "cdd-cpp"; then
+        echo "==================================="
+        echo "Running cdd-cpp tests"
+        echo "==================================="
+        (
+            cd cdd-cpp
+            make test
+        )
+    fi 
+
+    if should_run "cdd-java"; then
+        echo "==================================="
+    echo "Running cdd-java tests"
     echo "==================================="
     (
-        cd cdd-sh
-        ./test.sh
-        if command -v shellcheck >/dev/null 2>&1; then
-            shellcheck cdd.sh src/*/*.sh
-        else
-            echo "Warning: shellcheck is not installed. Skipping shellcheck."
-        fi
+        cd cdd-java
+        make test
     )
+    fi
+    if should_run "cdd-php"; then
+        echo "==================================="
+        echo "Running cdd-php tests"
+        echo "==================================="
+        (
+            cd cdd-php
+            make test
+        )
+    fi 
+
+    if should_run "cdd-ruby"; then
+        echo "==================================="
+        echo "Running cdd-ruby tests"
+        echo "==================================="
+        (
+            cd cdd-ruby
+            make test
+        )
+    fi 
+
+
+    if should_run "cdd-sh"; then
+        echo "==================================="
+        echo "Running cdd-sh tests"
+        echo "==================================="
+        (
+            cd cdd-sh
+            ./test.sh
+            if command -v shellcheck >/dev/null 2>&1; then
+                shellcheck cdd.sh src/*/*.sh
+            else
+                echo "Warning: shellcheck is not installed. Skipping shellcheck."
+            fi
+        )
+    fi
 }
 
 run_roundtrip() {
@@ -116,25 +312,30 @@ run_roundtrip() {
             node cdd-web-ng/dist/cli.js to_openapi -f temp-ng --format yaml > temp-ng-spec.yaml
             rm -rf temp-ng temp-ng-spec.yaml
             
-            echo "Testing $filename with cdd-kotlin..."
+            if should_run "cdd-kotlin"; then
+                echo "Testing $filename with cdd-kotlin..."
             (
                 cd cdd-kotlin
                 ./gradlew run --args="from_openapi -i ../$file --clientName TestClient --output ../temp-kt"
                 ./gradlew run --args="to_openapi -f ../temp-kt --format yaml" > ../temp-kt-spec.yaml
             )
             rm -rf temp-kt temp-kt-spec.yaml
+            fi
             
-            echo "Testing $filename with cdd-rust..."
+            if should_run "cdd-rust"; then
+                echo "Testing $filename with cdd-rust..."
             (
                 cd cdd-rust
                 cargo run -p cdd-cli -- scaffold --openapi-path "../$file" --output-dir "../temp-rs/src/handlers"
                 cargo run -p cdd-cli -- test-gen --openapi-path "../$file" --output-path "../temp-rs/tests/api_contracts.rs" --app-factory "crate::create_app"
             )
             rm -rf temp-rs
+            fi
         fi
     done
 
-    echo "Testing with cdd-python-client..."
+    if should_run "cdd-python-client"; then
+        echo "Testing with cdd-python-client..."
     (
         cd cdd-python-client
         pip install pyyaml
@@ -149,8 +350,10 @@ run_roundtrip() {
             fi
         done
     )
+    fi
 
-    echo "Testing with cdd-swift..."
+    if should_run "cdd-swift"; then
+        echo "Testing with cdd-swift..."
     (
         cd cdd-swift
         swift build -c release
@@ -163,8 +366,10 @@ run_roundtrip() {
             fi
         done
     )
+    fi
 
-    echo "Testing with cdd-sh..."
+    if should_run "cdd-sh"; then
+        echo "Testing with cdd-sh..."
     (
         cd cdd-sh
         for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
@@ -178,8 +383,10 @@ run_roundtrip() {
             fi
         done
     )
+    fi
 
-    echo "Testing with cdd-go..."
+    if should_run "cdd-go"; then
+        echo "Testing with cdd-go..."
     (
         cd cdd-go
         for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
@@ -191,8 +398,10 @@ run_roundtrip() {
             fi
         done
     )
+    fi
 
-    echo "Testing with cdd-csharp..."
+    if should_run "cdd-csharp"; then
+        echo "Testing with cdd-csharp..."
     (
         cd cdd-csharp
         for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
@@ -204,6 +413,7 @@ run_roundtrip() {
             fi
         done
     )
+    fi
 }
 
 if [ "$1" = "roundtrip" ]; then
@@ -214,14 +424,22 @@ if [ "$1" = "roundtrip" ]; then
 elif [ "$1" = "all" ]; then
     start_petstore
     run_test
+    run_wasm_builds
     run_roundtrip
     echo "==================================="
     echo "All local tests completed successfully!"
+    echo "==================================="
+elif [ "$1" = "only-test" ]; then
+    start_petstore
+    run_test
+    echo "==================================="
+    echo "All local tests completed successfully (WASM skipped)!"
     echo "==================================="
 else
     # default to test
     start_petstore
     run_test
+    run_wasm_builds
     echo "==================================="
     echo "All test.yml local tests completed successfully!"
     echo "==================================="

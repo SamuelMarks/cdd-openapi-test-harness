@@ -25,3 +25,18 @@
 [submodule "cdd-sh"]
 	path = cdd-sh
 	url = https://github.com/SamuelMarks/cdd-sh
+[submodule "cdd-c"]
+	path = cdd-c
+	url = https://github.com/SamuelMarks/cdd-c
+[submodule "cdd-cpp"]
+	path = cdd-cpp
+	url = https://github.com/SamuelMarks/cdd-cpp
+[submodule "cdd-java"]
+	path = cdd-java
+	url = https://github.com/SamuelMarks/cdd-java
+[submodule "cdd-php"]
+	path = cdd-php
+	url = https://github.com/SamuelMarks/cdd-php
+[submodule "cdd-ruby"]
+	path = cdd-ruby
+	url = https://github.com/SamuelMarks/cdd-ruby

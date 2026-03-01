@@ -9,14 +9,19 @@ git submodule update --init --recursive
 ```
 
 This will download:
-- `cdd-web-ng`
-- `cdd-kotlin`
-- `cdd-rust`
-- `cdd-python-client`
-- `cdd-swift`
+- `cdd-c`
+- `cdd-cpp`
 - `cdd-csharp`
 - `cdd-go`
+- `cdd-java`
+- `cdd-kotlin`
+- `cdd-php`
+- `cdd-python-client`
+- `cdd-ruby`
+- `cdd-rust`
 - `cdd-sh`
+- `cdd-swift`
+- `cdd-web-ng`
 - `OAI-OpenAPI-Specification`
 
 ## 2. Generate and Run Tests Locally
@@ -164,3 +169,38 @@ To orchestrate a new codegen repository into this suite:
    * `to_openapi` (e.g. `cdd-lang to_openapi -f path/to/code`)
 4. Add the submodule: `git submodule add <remote-url> cdd-<language>`
 5. Integrate it into the CI loop in `.github/workflows/roundtrip.yml`.
+
+## 4. Testing and Filtering
+
+This project includes advanced filtering options via environment variables to target specific builds, environments, or toolchains. These apply to `local-test.sh` and the GitHub actions `roundtrip.yml` workflows.
+
+### Generating the Testing Matrix
+
+To programmatically test the entire ecosystem against the `petstore.json` specification (as shown in the ASCII matrix), run:
+
+```sh
+# Ensure you have petstore_server running, or the docker engine available.
+./local-test.sh all
+```
+
+### Filtering Executions
+
+If you want to isolate tests, you can leverage three powerful environment variables:
+
+1. **`ONLY_TEST`** (Whitelist): Targets specific implementations. Ignores all others.
+   ```sh
+   # Only test the Angular client generator and the C# generator
+   ONLY_TEST="cdd-web-ng,cdd-csharp" ./local-test.sh test
+   ```
+
+2. **`IGNORE_TESTS`** (Blacklist): Skips specific implementations.
+   ```sh
+   # Skip testing the older C and Ruby implementations
+   IGNORE_TESTS="cdd-c,cdd-ruby" ./local-test.sh test
+   ```
+
+3. **`TARGET_TYPE`**: Filters by the target type of the implementation (`client` or `server`).
+   ```sh
+   # Test only the server generators
+   TARGET_TYPE="server" ./local-test.sh roundtrip
+   ```

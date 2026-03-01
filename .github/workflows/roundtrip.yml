@@ -6,9 +6,14 @@ on:
   pull_request:
     branches: [ "master" ]
 
+
 jobs:
   roundtrip-tests:
     runs-on: ubuntu-latest
+    env:
+      IGNORE_TESTS: "cdd-c,cdd-ruby"
+      TARGET_TYPE: "all"
+      ONLY_TEST: ""
     steps:
       - name: Checkout repo and submodules
         uses: actions/checkout@v6
@@ -73,8 +78,73 @@ jobs:
       - name: Run Roundtrip Tests for all submodules
         run: |
           set -e
+
+          is_client() {
+            case "$1" in
+                cdd-c|cdd-cpp|cdd-csharp|cdd-go|cdd-java|cdd-kotlin|cdd-php|cdd-python-client|cdd-ruby|cdd-rust|cdd-sh|cdd-swift|cdd-web-ng) return 0 ;;
+                *) return 1 ;;
+            esac
+          }
+
+          is_server() {
+            case "$1" in
+                cdd-rust) return 0 ;;
+                *) return 1 ;;
+            esac
+          }
+
+          should_run() {
+            if [ -n "$ONLY_TEST" ]; then
+              if echo "$ONLY_TEST" | tr ',' '
+' | grep -q "^$1$"; then
+                return 0
+              else
+                return 1
+              fi
+            fi
+
+            if [ -n "$IGNORE_TESTS" ] && echo "$IGNORE_TESTS" | tr ',' '
+' | grep -q "^$1$"; then
+              echo "Skipping $1 (in IGNORE_TESTS)"
+              return 1
+            fi
+            if [ "${TARGET_TYPE:-all}" = "client" ] && ! is_client "$1"; then
+              echo "Skipping $1 (not a client)"
+              return 1
+            fi
+            if [ "${TARGET_TYPE:-all}" = "server" ] && ! is_server "$1"; then
+              echo "Skipping $1 (not a server)"
+              return 1
+            fi
+            return 0
+          }
+
+          is_server() {
+            case "$1" in
+                cdd-rust) return 0 ;;
+                *) return 1 ;;
+            esac
+          }
+
+          should_run() {
+            if echo "$IGNORE_TESTS" | tr ',' '
+' | grep -q "^$1$"; then
+              echo "Skipping $1 (in IGNORE_TESTS)"
+              return 1
+            fi
+            if [ "${TARGET_TYPE:-all}" = "client" ] && ! is_client "$1"; then
+              echo "Skipping $1 (not a client)"
+              return 1
+            fi
+            if [ "${TARGET_TYPE:-all}" = "server" ] && ! is_server "$1"; then
+              echo "Skipping $1 (not a server)"
+              return 1
+            fi
+            return 0
+          }
           
-          echo "==================================="
+          if should_run "cdd-web-ng"; then
+echo "==================================="
           echo "Running CDD Web NG Roundtrip Tests"
           echo "==================================="
           for file in OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
@@ -84,8 +154,10 @@ jobs:
               node cdd-web-ng/dist/cli.js to_openapi -f temp-ng --format yaml > temp-ng-spec.yaml
               rm -rf temp-ng temp-ng-spec.yaml
           done
+          fi
 
-          echo "==================================="
+          if should_run "cdd-kotlin"; then
+echo "==================================="
           echo "Running CDD Kotlin Roundtrip Tests"
           echo "==================================="
           for file in OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
@@ -97,8 +169,10 @@ jobs:
               cd ..
               rm -rf temp-kt temp-kt-spec.yaml
           done
+          fi
 
-          echo "==================================="
+          if should_run "cdd-rust"; then
+echo "==================================="
           echo "Running CDD Rust Scaffold Tests"
           echo "==================================="
           for file in OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
@@ -110,12 +184,14 @@ jobs:
               cd ..
               rm -rf temp-rs
           done
+          fi
 
           echo "All roundtrip tests completed successfully!"
 
       - name: Install and run CDD Python Client Roundtrip Tests
         run: |
           set -e
+          if ! echo "$IGNORE_TESTS" | tr ',' '\n' | grep -q "^cdd-python-client$"; then
           echo "==================================="
           echo "Running CDD Python Client Tests"
           echo "==================================="
@@ -132,10 +208,78 @@ jobs:
               rm -rf temp-py temp-py-spec.json
           done
           cd ..
+          else
+            echo "Skipping cdd-python-client (in IGNORE_TESTS)"
+          fi
 
       - name: Build and run CDD Swift Roundtrip Tests
         run: |
           set -e
+          is_client() {
+            case "$1" in
+                cdd-c|cdd-cpp|cdd-csharp|cdd-go|cdd-java|cdd-kotlin|cdd-php|cdd-python-client|cdd-ruby|cdd-rust|cdd-sh|cdd-swift|cdd-web-ng) return 0 ;;
+                *) return 1 ;;
+            esac
+          }
+
+          is_server() {
+            case "$1" in
+                cdd-rust) return 0 ;;
+                *) return 1 ;;
+            esac
+          }
+
+          should_run() {
+            if [ -n "$ONLY_TEST" ]; then
+              if echo "$ONLY_TEST" | tr ',' '
+' | grep -q "^$1$"; then
+                return 0
+              else
+                return 1
+              fi
+            fi
+
+            if [ -n "$IGNORE_TESTS" ] && echo "$IGNORE_TESTS" | tr ',' '
+' | grep -q "^$1$"; then
+              echo "Skipping $1 (in IGNORE_TESTS)"
+              return 1
+            fi
+            if [ "${TARGET_TYPE:-all}" = "client" ] && ! is_client "$1"; then
+              echo "Skipping $1 (not a client)"
+              return 1
+            fi
+            if [ "${TARGET_TYPE:-all}" = "server" ] && ! is_server "$1"; then
+              echo "Skipping $1 (not a server)"
+              return 1
+            fi
+            return 0
+          }
+
+          is_server() {
+            case "$1" in
+                cdd-rust) return 0 ;;
+                *) return 1 ;;
+            esac
+          }
+
+          should_run() {
+            if echo "$IGNORE_TESTS" | tr ',' '
+' | grep -q "^$1$"; then
+              echo "Skipping $1 (in IGNORE_TESTS)"
+              return 1
+            fi
+            if [ "${TARGET_TYPE:-all}" = "client" ] && ! is_client "$1"; then
+              echo "Skipping $1 (not a client)"
+              return 1
+            fi
+            if [ "${TARGET_TYPE:-all}" = "server" ] && ! is_server "$1"; then
+              echo "Skipping $1 (not a server)"
+              return 1
+            fi
+            return 0
+          }
+
+          if should_run "cdd-swift"; then
           echo "==================================="
           echo "Running CDD Swift Roundtrip Tests"
           echo "==================================="
@@ -151,7 +295,9 @@ jobs:
               rm -f temp-swift-spec.json temp-swift.swift temp-swift-out.json
           done
           cd ..
+          fi
 
+          if should_run "cdd-sh"; then
           echo "==================================="
           echo "Running CDD Shell Roundtrip Tests"
           echo "==================================="
@@ -167,7 +313,9 @@ jobs:
               rm -f temp-sh-spec.json temp-routes.sh temp-sh-out.json ast.json
           done
           cd ..
+          fi
 
+          if should_run "cdd-go"; then
           echo "==================================="
           echo "Running CDD Go Roundtrip Tests"
           echo "==================================="
@@ -181,7 +329,9 @@ jobs:
               rm -rf temp-go-spec.json temp-go temp-go-out.json
           done
           cd ..
+          fi
 
+          if should_run "cdd-csharp"; then
           echo "==================================="
           echo "Running CDD C# Roundtrip Tests"
           echo "==================================="
@@ -195,5 +345,233 @@ jobs:
               rm -rf temp-cs-spec.json temp-cs temp-cs-out.json
           done
           cd ..
+          fi
 
           echo "All roundtrip tests completed successfully for all clients!"
+
+      - name: Run tests for newly added C/C++/Java/PHP/Ruby submodules
+        run: |
+          set -e
+          is_client() {
+            case "$1" in
+                cdd-c|cdd-cpp|cdd-csharp|cdd-go|cdd-java|cdd-kotlin|cdd-php|cdd-python-client|cdd-ruby|cdd-rust|cdd-sh|cdd-swift|cdd-web-ng) return 0 ;;
+                *) return 1 ;;
+            esac
+          }
+
+          is_server() {
+            case "$1" in
+                cdd-rust) return 0 ;;
+                *) return 1 ;;
+            esac
+          }
+
+          should_run() {
+            if [ -n "$ONLY_TEST" ]; then
+              if echo "$ONLY_TEST" | tr ',' '
+' | grep -q "^$1$"; then
+                return 0
+              else
+                return 1
+              fi
+            fi
+
+            if [ -n "$IGNORE_TESTS" ] && echo "$IGNORE_TESTS" | tr ',' '
+' | grep -q "^$1$"; then
+              echo "Skipping $1 (in IGNORE_TESTS)"
+              return 1
+            fi
+            if [ "${TARGET_TYPE:-all}" = "client" ] && ! is_client "$1"; then
+              echo "Skipping $1 (not a client)"
+              return 1
+            fi
+            if [ "${TARGET_TYPE:-all}" = "server" ] && ! is_server "$1"; then
+              echo "Skipping $1 (not a server)"
+              return 1
+            fi
+            return 0
+          }
+
+          is_server() {
+            case "$1" in
+                cdd-rust) return 0 ;;
+                *) return 1 ;;
+            esac
+          }
+
+          should_run() {
+            if echo "$IGNORE_TESTS" | tr ',' '
+' | grep -q "^$1$"; then
+              echo "Skipping $1 (in IGNORE_TESTS)"
+              return 1
+            fi
+            if [ "${TARGET_TYPE:-all}" = "client" ] && ! is_client "$1"; then
+              echo "Skipping $1 (not a client)"
+              return 1
+            fi
+            if [ "${TARGET_TYPE:-all}" = "server" ] && ! is_server "$1"; then
+              echo "Skipping $1 (not a server)"
+              return 1
+            fi
+            return 0
+          }
+          if should_run "cdd-c"; then
+          echo "==================================="
+          echo "Running CDD C Tests"
+          echo "==================================="
+          cd cdd-c && make install_base && make install_deps && make test && cd ..
+          fi
+
+          if should_run "cdd-cpp"; then
+          echo "==================================="
+          echo "Running CDD C++ Tests"
+          echo "==================================="
+          cd cdd-cpp && make install_base && make install_deps && make test && cd ..
+          fi
+
+          if should_run "cdd-java"; then
+          echo "==================================="
+          echo "Running CDD Java Tests"
+          echo "==================================="
+          cd cdd-java && make install_base && make install_deps && make test && cd ..
+          fi
+
+          if should_run "cdd-php"; then
+          echo "==================================="
+          echo "Running CDD PHP Tests"
+          echo "==================================="
+          cd cdd-php && make install_base && make install_deps && make test && cd ..
+          fi
+
+          if should_run "cdd-ruby"; then
+          echo "==================================="
+          echo "Running CDD Ruby Tests"
+          echo "==================================="
+          cd cdd-ruby && make install_base && make install_deps && make test && cd ..
+          fi
+
+      - name: Build WASM targets
+        run: |
+          set -e
+          is_client() {
+            case "$1" in
+                cdd-c|cdd-cpp|cdd-csharp|cdd-go|cdd-java|cdd-kotlin|cdd-php|cdd-python-client|cdd-ruby|cdd-rust|cdd-sh|cdd-swift|cdd-web-ng) return 0 ;;
+                *) return 1 ;;
+            esac
+          }
+
+          is_server() {
+            case "$1" in
+                cdd-rust) return 0 ;;
+                *) return 1 ;;
+            esac
+          }
+
+          should_run() {
+            if [ -n "$ONLY_TEST" ]; then
+              if echo "$ONLY_TEST" | tr ',' '
+' | grep -q "^$1$"; then
+                return 0
+              else
+                return 1
+              fi
+            fi
+
+            if [ -n "$IGNORE_TESTS" ] && echo "$IGNORE_TESTS" | tr ',' '
+' | grep -q "^$1$"; then
+              echo "Skipping $1 (in IGNORE_TESTS)"
+              return 1
+            fi
+            if [ "${TARGET_TYPE:-all}" = "client" ] && ! is_client "$1"; then
+              echo "Skipping $1 (not a client)"
+              return 1
+            fi
+            if [ "${TARGET_TYPE:-all}" = "server" ] && ! is_server "$1"; then
+              echo "Skipping $1 (not a server)"
+              return 1
+            fi
+            return 0
+          }
+
+          is_server() {
+            case "$1" in
+                cdd-rust) return 0 ;;
+                *) return 1 ;;
+            esac
+          }
+
+          should_run() {
+            if echo "$IGNORE_TESTS" | tr ',' '
+' | grep -q "^$1$"; then
+              echo "Skipping $1 (in IGNORE_TESTS)"
+              return 1
+            fi
+            if [ "${TARGET_TYPE:-all}" = "client" ] && ! is_client "$1"; then
+              echo "Skipping $1 (not a client)"
+              return 1
+            fi
+            if [ "${TARGET_TYPE:-all}" = "server" ] && ! is_server "$1"; then
+              echo "Skipping $1 (not a server)"
+              return 1
+            fi
+            return 0
+          }
+          echo "==================================="
+          echo "Setting up Emscripten SDK"
+          echo "==================================="
+          if [ ! -d "emsdk" ]; then
+            git clone https://github.com/emscripten-core/emsdk.git
+            cd emsdk
+            ./emsdk install latest
+            ./emsdk activate latest
+            cd ..
+          fi
+
+          if should_run "cdd-c"; then
+          echo "==================================="
+          echo "Building WASM for cdd-c"
+          echo "==================================="
+          cd cdd-c && make build_wasm && cd ..
+          fi
+
+          if should_run "cdd-cpp"; then
+          echo "==================================="
+          echo "Building WASM for cdd-cpp"
+          echo "==================================="
+          cd cdd-cpp && make build_wasm && cd ..
+          fi
+
+          if should_run "cdd-csharp"; then
+          echo "==================================="
+          echo "Building WASM for cdd-csharp"
+          echo "==================================="
+          cd cdd-csharp && make build_wasm && cd ..
+          fi
+
+          if should_run "cdd-go"; then
+          echo "==================================="
+          echo "Building WASM for cdd-go"
+          echo "==================================="
+          cd cdd-go && make build_wasm && cd ..
+          fi
+
+          if should_run "cdd-php"; then
+          echo "==================================="
+          echo "Building WASM for cdd-php"
+          echo "==================================="
+          cd cdd-php && make build_wasm && cd ..
+          fi
+
+          if should_run "cdd-python-client"; then
+          echo "==================================="
+          echo "Building WASM for cdd-python-client"
+          echo "==================================="
+          cd cdd-python-client && make build_wasm && cd ..
+          fi
+
+          if should_run "cdd-ruby"; then
+          echo "==================================="
+          echo "Building WASM for cdd-ruby"
+          echo "==================================="
+          cd cdd-ruby && make build_wasm && cd ..
+          fi
