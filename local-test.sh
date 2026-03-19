@@ -1,17 +1,42 @@
 #!/bin/sh
 set -e
 
+# ==========================================
+# Script: local-test.sh
+# Description: Orchestrates local execution of native tests, WASM builds, and roundtrip tests
+#              across all CDD toolchains.
+# Usage: ./local-test.sh [roundtrip|all|only-test]
+# Configuration Variables:
+#   IGNORE_TESTS: Comma-separated list of toolchains to skip.
+#   ONLY_TEST: Comma-separated list of toolchains to exclusively run.
+#   TARGET_TYPE: Filter by target type ('client', 'server', 'all'). Defaults to 'all'.
+# ==========================================
+
 IGNORE_TESTS="${IGNORE_TESTS:-}"
 ONLY_TEST="${ONLY_TEST:-}"
 TARGET_TYPE="${TARGET_TYPE:-all}"
 
+# ==========================================
+# Function: is_client
+# Description: Determines if a given module is a client toolchain.
+# Parameters:
+#   $1 - Module name (e.g., cdd-c)
+# Returns: 0 if client, 1 otherwise.
+# ==========================================
 is_client() {
     case "$1" in
-        cdd-c|cdd-cpp|cdd-csharp|cdd-go|cdd-java|cdd-kotlin|cdd-php|cdd-python-client|cdd-ruby|cdd-rust|cdd-sh|cdd-swift|cdd-web-ng) return 0 ;;
+        cdd-c|cdd-cpp|cdd-csharp|cdd-go|cdd-java|cdd-kotlin|cdd-php|cdd-python-all|cdd-ruby|cdd-rust|cdd-sh|cdd-swift|cdd-ts) return 0 ;;
         *) return 1 ;;
     esac
 }
 
+# ==========================================
+# Function: is_server
+# Description: Determines if a given module is a server toolchain.
+# Parameters:
+#   $1 - Module name (e.g., cdd-rust)
+# Returns: 0 if server, 1 otherwise.
+# ==========================================
 is_server() {
     case "$1" in
         cdd-rust) return 0 ;;
@@ -19,20 +44,25 @@ is_server() {
     esac
 }
 
+# ==========================================
+# Function: should_run
+# Description: Determines if a given module should be executed based on configuration variables.
+# Parameters:
+#   $1 - Module name (e.g., cdd-rust)
+# Returns: 0 if it should run, 1 otherwise.
+# ==========================================
 should_run() {
     local module=$1
 
     if [ -n "$ONLY_TEST" ]; then
-        if echo "$ONLY_TEST" | tr ',' '
-' | grep -q "^${module}$"; then
+        if echo "$ONLY_TEST" | tr ',' '\n' | grep -q "^${module}$"; then
             return 0
         else
             return 1
         fi
     fi
 
-    if [ -n "$IGNORE_TESTS" ] && echo "$IGNORE_TESTS" | tr ',' '
-' | grep -q "^${module}$"; then
+    if [ -n "$IGNORE_TESTS" ] && echo "$IGNORE_TESTS" | tr ',' '\n' | grep -q "^${module}$"; then
         echo "Skipping $module (in IGNORE_TESTS)"
         return 1
     fi
@@ -50,8 +80,10 @@ should_run() {
     return 0
 }
 
-
-
+# ==========================================
+# Function: cleanup
+# Description: Stops the petstore_server Docker container upon exit.
+# ==========================================
 cleanup() {
     if command -v docker >/dev/null 2>&1; then
         if docker ps -q --filter "name=petstore_server" | grep -q .; then
@@ -62,7 +94,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Start petstore server if docker is available
+# ==========================================
+# Function: start_petstore
+# Description: Starts the petstore_server via Docker for integration tests.
+# ==========================================
 start_petstore() {
     if command -v docker >/dev/null 2>&1; then
         echo "Starting petstore server via docker..."
@@ -74,6 +109,10 @@ start_petstore() {
     fi
 }
 
+# ==========================================
+# Function: setup_emsdk
+# Description: Sets up the Emscripten SDK required for WASM builds.
+# ==========================================
 setup_emsdk() {
     if [ ! -d "emsdk" ]; then
         echo "Setting up emsdk..."
@@ -85,6 +124,10 @@ setup_emsdk() {
     fi
 }
 
+# ==========================================
+# Function: run_wasm_builds
+# Description: Triggers WebAssembly builds across applicable toolchains.
+# ==========================================
 run_wasm_builds() {
     echo "==================================="
     echo "Running WASM Builds"
@@ -116,9 +159,9 @@ run_wasm_builds() {
         (cd cdd-php && make build_wasm)
     fi
     
-    if should_run "cdd-python-client"; then
-        echo "Building WASM for cdd-python-client..."
-        (cd cdd-python-client && make build_wasm)
+    if should_run "cdd-python-all"; then
+        echo "Building WASM for cdd-python-all..."
+        (cd cdd-python-all && make build_wasm)
     fi
     
     if should_run "cdd-ruby"; then
@@ -127,83 +170,86 @@ run_wasm_builds() {
     fi
 }
 
+# ==========================================
+# Function: run_test
+# Description: Executes native tests for each enabled toolchain.
+# ==========================================
 run_test() {
-    if should_run "cdd-web-ng"; then
+    if should_run "cdd-ts"; then
         echo "==================================="
-    echo "Running cdd-web-ng (Angular Integration) tests"
-    echo "==================================="
-    (
-        cd cdd-web-ng
-        if [ -f package-lock.json ]; then
-            npm ci
-        else
-            npm i
-        fi
-        npm run build
-        cd ..
-        rm -rf angular-client
-        npx -p @angular/cli ng new angular-client --defaults --skip-git
-        cd angular-client
-        npx ng add @angular/material --skip-confirmation || true
-        cd ../cdd-web-ng
-        node dist/cli.js from_openapi -i ../petstore.json --output ../angular-client/src/app/api
-        
-        cd ../angular-client
-        if [ -f package-lock.json ]; then
-            npm ci
-        else
-            npm i
-        fi
-        npm run test -- --watch=false
-    )
+        echo "Running cdd-ts (Angular Integration) tests"
+        echo "==================================="
+        (
+            cd cdd-ts
+            if [ -f package-lock.json ]; then
+                npm ci
+            else
+                npm i
+            fi
+            npm run build
+            cd ..
+            rm -rf angular-client
+            npx -p @angular/cli ng new angular-client --defaults --skip-git
+            cd angular-client
+            npx ng add @angular/material --skip-confirmation || true
+            cd ../cdd-ts
+            node dist/cli.js from_openapi -i ../petstore.json --output ../angular-client/src/app/api
+            
+            cd ../angular-client
+            if [ -f package-lock.json ]; then
+                npm ci
+            else
+                npm i
+            fi
+            npm run test -- --watch=false
+        )
     fi
 
     if should_run "cdd-kotlin"; then
         echo "==================================="
-    echo "Running cdd-kotlin tests"
-    echo "==================================="
-    (
-        cd cdd-kotlin
-        rm -rf ../kotlin-client
-        ./gradlew run --args="from_openapi -i ../petstore.json --clientName MyGeneratedClient --output ../kotlin-client --dateType string"
-        
-        mkdir -p ../kotlin-client/composeApp/src/commonTest/kotlin/com/example/auto
-        cp tests/integration/kotlin-integration.kt ../kotlin-client/composeApp/src/commonTest/kotlin/com/example/auto/IntegrationTest.kt
-        
-        cd ../kotlin-client
-        ./gradlew test
-    )
+        echo "Running cdd-kotlin tests"
+        echo "==================================="
+        (
+            cd cdd-kotlin
+            rm -rf ../kotlin-client
+            ./gradlew run --args="from_openapi -i ../petstore.json --clientName MyGeneratedClient --output ../kotlin-client --dateType string"
+            
+            mkdir -p ../kotlin-client/composeApp/src/commonTest/kotlin/com/example/auto
+            cp tests/integration/kotlin-integration.kt ../kotlin-client/composeApp/src/commonTest/kotlin/com/example/auto/IntegrationTest.kt
+            
+            cd ../kotlin-client
+            ./gradlew test
+        )
     fi
 
     if should_run "cdd-go"; then
         echo "==================================="
-    echo "Running cdd-go tests"
-    echo "==================================="
-    (
-        cd cdd-go
-        go test -v -coverprofile=coverage.out ./...
-    )
+        echo "Running cdd-go tests"
+        echo "==================================="
+        (
+            cd cdd-go
+            go test -v -coverprofile=coverage.out ./...
+        )
     fi
 
     if should_run "cdd-csharp"; then
         echo "==================================="
-    echo "Running cdd-csharp tests"
-    echo "==================================="
-    (
-        cd cdd-csharp
-        dotnet restore
-        dotnet build --no-restore
-        dotnet test tests/Cdd.OpenApi.Tests --no-build
-    )
-    fi
-
-    echo "==================================="
-    if should_run "cdd-python-client"; then
-        echo "==================================="
-        echo "Running cdd-python-client tests"
+        echo "Running cdd-csharp tests"
         echo "==================================="
         (
-            cd cdd-python-client
+            cd cdd-csharp
+            dotnet restore
+            dotnet build --no-restore
+            dotnet test tests/Cdd.OpenApi.Tests --no-build
+        )
+    fi
+
+    if should_run "cdd-python-all"; then
+        echo "==================================="
+        echo "Running cdd-python-all tests"
+        echo "==================================="
+        (
+            cd cdd-python-all
             make test
         )
     fi
@@ -250,12 +296,12 @@ run_test() {
 
     if should_run "cdd-java"; then
         echo "==================================="
-    echo "Running cdd-java tests"
-    echo "==================================="
-    (
-        cd cdd-java
-        make test
-    )
+        echo "Running cdd-java tests"
+        echo "==================================="
+        (
+            cd cdd-java
+            make test
+        )
     fi
     if should_run "cdd-php"; then
         echo "==================================="
@@ -277,7 +323,6 @@ run_test() {
         )
     fi 
 
-
     if should_run "cdd-sh"; then
         echo "==================================="
         echo "Running cdd-sh tests"
@@ -294,154 +339,170 @@ run_test() {
     fi
 }
 
+# ==========================================
+# Function: run_roundtrip
+# Description: Executes roundtrip tests against OpenAPI schemas for all enabled toolchains.
+# ==========================================
 run_roundtrip() {
     echo "==================================="
     echo "Running Roundtrip Tests"
     echo "==================================="
-    # cdd-web-ng roundtrip
-    (
-        cd cdd-web-ng
-        if [ -f package-lock.json ]; then npm ci; else npm i; fi
-        npm run build
-    )
+    # cdd-ts roundtrip
+    if should_run "cdd-ts"; then
+        (
+            cd cdd-ts
+            if [ -f package-lock.json ]; then npm ci; else npm i; fi
+            npm run build
+        )
+        for file in OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+            if [ -f "$file" ]; then
+                filename=$(basename "$file")
+                echo "Testing $filename with cdd-ts..."
+                node cdd-ts/dist/cli.js from_openapi -i "$file" --output temp-ng
+                node cdd-ts/dist/cli.js to_openapi -f temp-ng --format yaml > temp-ng-spec.yaml
+                rm -rf temp-ng temp-ng-spec.yaml
+            fi
+        done
+    fi
     for file in OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
         if [ -f "$file" ]; then
             filename=$(basename "$file")
-            echo "Testing $filename with cdd-web-ng..."
-            node cdd-web-ng/dist/cli.js from_openapi -i "$file" --output temp-ng
-            node cdd-web-ng/dist/cli.js to_openapi -f temp-ng --format yaml > temp-ng-spec.yaml
-            rm -rf temp-ng temp-ng-spec.yaml
             
             if should_run "cdd-kotlin"; then
                 echo "Testing $filename with cdd-kotlin..."
-            (
-                cd cdd-kotlin
-                ./gradlew run --args="from_openapi -i ../$file --clientName TestClient --output ../temp-kt"
-                ./gradlew run --args="to_openapi -f ../temp-kt --format yaml" > ../temp-kt-spec.yaml
-            )
-            rm -rf temp-kt temp-kt-spec.yaml
+                (
+                    cd cdd-kotlin
+                    ./gradlew run --args="from_openapi -i ../$file --clientName TestClient --output ../temp-kt"
+                    ./gradlew run --args="to_openapi -f ../temp-kt --format yaml" > ../temp-kt-spec.yaml
+                )
+                rm -rf temp-kt temp-kt-spec.yaml
             fi
             
             if should_run "cdd-rust"; then
                 echo "Testing $filename with cdd-rust..."
-            (
-                cd cdd-rust
-                cargo run -p cdd-cli -- scaffold --openapi-path "../$file" --output-dir "../temp-rs/src/handlers"
-                cargo run -p cdd-cli -- test-gen --openapi-path "../$file" --output-path "../temp-rs/tests/api_contracts.rs" --app-factory "crate::create_app"
-            )
-            rm -rf temp-rs
+                (
+                    cd cdd-rust
+                    cargo run -p cdd-cli -- scaffold --openapi-path "../$file" --output-dir "../temp-rs/src/handlers"
+                    cargo run -p cdd-cli -- test-gen --openapi-path "../$file" --output-path "../temp-rs/tests/api_contracts.rs" --app-factory "crate::create_app"
+                )
+                rm -rf temp-rs
             fi
         fi
     done
 
-    if should_run "cdd-python-client"; then
-        echo "Testing with cdd-python-client..."
-    (
-        cd cdd-python-client
-        pip install pyyaml
-        pip install -e .
-        for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
-            if [ -f "$file" ]; then
-                mkdir -p temp-py
-                python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-py-spec.json
-                cdd sync --from-openapi temp-py-spec.json --to-python temp-py/
-                cdd sync --dir temp-py/
-                rm -rf temp-py temp-py-spec.json
-            fi
-        done
-    )
+    if should_run "cdd-python-all"; then
+        echo "Testing with cdd-python-all..."
+        (
+            cd cdd-python-all
+            pip install pyyaml
+            pip install -e .
+            for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+                if [ -f "$file" ]; then
+                    mkdir -p temp-py
+                    python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-py-spec.json
+                    cdd sync --from-openapi temp-py-spec.json --to-python temp-py/
+                    cdd sync --dir temp-py/
+                    rm -rf temp-py temp-py-spec.json
+                fi
+            done
+        )
     fi
 
     if should_run "cdd-swift"; then
         echo "Testing with cdd-swift..."
-    (
-        cd cdd-swift
-        swift build -c release
-        for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
-            if [ -f "$file" ]; then
-                python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-swift-spec.json
-                .build/release/cdd-swift generate-swift temp-swift-spec.json -o temp-swift.swift
-                .build/release/cdd-swift parse-swift temp-swift.swift -o temp-swift-out.json
-                rm -f temp-swift-spec.json temp-swift.swift temp-swift-out.json
-            fi
-        done
-    )
+        (
+            cd cdd-swift
+            swift build -c release
+            for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+                if [ -f "$file" ]; then
+                    python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-swift-spec.json
+                    .build/release/cdd-swift generate-swift temp-swift-spec.json -o temp-swift.swift
+                    .build/release/cdd-swift parse-swift temp-swift.swift -o temp-swift-out.json
+                    rm -f temp-swift-spec.json temp-swift.swift temp-swift-out.json
+                fi
+            done
+        )
     fi
 
     if should_run "cdd-sh"; then
         echo "Testing with cdd-sh..."
-    (
-        cd cdd-sh
-        for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
-            if [ -f "$file" ]; then
-                python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-sh-spec.json
-                ./cdd.sh parse openapi temp-sh-spec.json
-                ./cdd.sh emit routes temp-routes.sh
-                ./cdd.sh parse routes temp-routes.sh
-                ./cdd.sh emit openapi temp-sh-out.json
-                rm -f temp-sh-spec.json temp-routes.sh temp-sh-out.json ast.json
-            fi
-        done
-    )
+        (
+            cd cdd-sh
+            for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+                if [ -f "$file" ]; then
+                    python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-sh-spec.json
+                    ./cdd.sh parse openapi temp-sh-spec.json
+                    ./cdd.sh emit routes temp-routes.sh
+                    ./cdd.sh parse routes temp-routes.sh
+                    ./cdd.sh emit openapi temp-sh-out.json
+                    rm -f temp-sh-spec.json temp-routes.sh temp-sh-out.json ast.json
+                fi
+            done
+        )
     fi
 
     if should_run "cdd-go"; then
         echo "Testing with cdd-go..."
-    (
-        cd cdd-go
-        for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
-            if [ -f "$file" ]; then
-                python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-go-spec.json
-                go run ./cmd/cdd_go from_openapi -i temp-go-spec.json -o temp-go
-                go run ./cmd/cdd_go to_openapi -i temp-go -o temp-go-out.json
-                rm -rf temp-go-spec.json temp-go temp-go-out.json
-            fi
-        done
-    )
+        (
+            cd cdd-go
+            for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+                if [ -f "$file" ]; then
+                    python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-go-spec.json
+                    go run ./cmd/cdd_go from_openapi -i temp-go-spec.json -o temp-go
+                    go run ./cmd/cdd_go to_openapi -i temp-go -o temp-go-out.json
+                    rm -rf temp-go-spec.json temp-go temp-go-out.json
+                fi
+            done
+        )
     fi
 
     if should_run "cdd-csharp"; then
         echo "Testing with cdd-csharp..."
-    (
-        cd cdd-csharp
-        for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
-            if [ -f "$file" ]; then
-                python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-cs-spec.json
-                dotnet run --project src/Cdd.OpenApi.Cli -- from_openapi -i temp-cs-spec.json -o temp-cs
-                dotnet run --project src/Cdd.OpenApi.Cli -- to_openapi -i temp-cs -o temp-cs-out.json
-                rm -rf temp-cs-spec.json temp-cs temp-cs-out.json
-            fi
-        done
-    )
+        (
+            cd cdd-csharp
+            for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+                if [ -f "$file" ]; then
+                    python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-cs-spec.json
+                    dotnet run --project src/Cdd.OpenApi.Cli -- from_openapi -i temp-cs-spec.json -o temp-cs
+                    dotnet run --project src/Cdd.OpenApi.Cli -- to_openapi -i temp-cs -o temp-cs-out.json
+                    rm -rf temp-cs-spec.json temp-cs temp-cs-out.json
+                fi
+            done
+        )
     fi
 }
 
-if [ "$1" = "roundtrip" ]; then
-    run_roundtrip
-    echo "==================================="
-    echo "All roundtrip tests completed successfully!"
-    echo "==================================="
-elif [ "$1" = "all" ]; then
-    start_petstore
-    run_test
-    run_wasm_builds
-    run_roundtrip
-    echo "==================================="
-    echo "All local tests completed successfully!"
-    echo "==================================="
-elif [ "$1" = "only-test" ]; then
-    start_petstore
-    run_test
-    echo "==================================="
-    echo "All local tests completed successfully (WASM skipped)!"
-    echo "==================================="
-else
-    # default to test
-    start_petstore
-    run_test
-    run_wasm_builds
-    echo "==================================="
-    echo "All test.yml local tests completed successfully!"
-    echo "==================================="
-    echo "Run '$0 roundtrip' to execute roundtrip tests."
+# ==========================================
+# Script Execution block
+# ==========================================
+if [ "$__BASH_SOURCED_TEST__" != "1" ]; then
+    if [ "$1" = "roundtrip" ]; then
+        run_roundtrip
+        echo "==================================="
+        echo "All roundtrip tests completed successfully!"
+        echo "==================================="
+    elif [ "$1" = "all" ]; then
+        start_petstore
+        run_test
+        run_wasm_builds
+        run_roundtrip
+        echo "==================================="
+        echo "All local tests completed successfully!"
+        echo "==================================="
+    elif [ "$1" = "only-test" ]; then
+        start_petstore
+        run_test
+        echo "==================================="
+        echo "All local tests completed successfully (WASM skipped)!"
+        echo "==================================="
+    else
+        # default to test
+        start_petstore
+        run_test
+        run_wasm_builds
+        echo "==================================="
+        echo "All test.yml local tests completed successfully!"
+        echo "==================================="
+        echo "Run '$0 roundtrip' to execute roundtrip tests."
+    fi
 fi

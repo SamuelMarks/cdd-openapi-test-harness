@@ -23,12 +23,12 @@ This project ties together independent Git repositories (submodules) containing 
 | [`cdd-java`](https://github.com/SamuelMarks/cdd-java) | Java | Client | | OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-java/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-java/actions/workflows/ci.yml) |
 | [`cdd-kotlin`](https://github.com/SamuelMarks/cdd-kotlin) | Kotlin (Multiplatform) | Client | Auto-Admin UI | OpenAPI 3.2.0 | [![CI](https://github.com/offscale/cdd-kotlin/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-kotlin/actions/workflows/ci.yml) |
 | [`cdd-php`](https://github.com/SamuelMarks/cdd-php) | PHP | Client |  | OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-php/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-php/actions/workflows/ci.yml) |
-| [`cdd-python-client`](https://github.com/offscale/cdd-python-client) | Python | Client |  | OpenAPI 3.2.0 | [![uv](https://github.com/offscale/cdd-python-client/actions/workflows/uv.yml/badge.svg)](https://github.com/offscale/cdd-python-client/actions/workflows/uv.yml) |
+| [`cdd-python-all`](https://github.com/offscale/cdd-python-all) | Python | Client |  | OpenAPI 3.2.0 | [![uv](https://github.com/offscale/cdd-python-all/actions/workflows/uv.yml/badge.svg)](https://github.com/offscale/cdd-python-all/actions/workflows/uv.yml) |
 | [`cdd-ruby`](https://github.com/SamuelMarks/cdd-ruby) | Ruby | Client |  | OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-ruby/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-ruby/actions/workflows/ci.yml) |
 | [`cdd-rust`](https://github.com/SamuelMarks/cdd-rust) | Rust | Client & Server | CLI frontend for SDK | OpenAPI 3.2.0 | [![CI](https://github.com/offscale/cdd-rust/actions/workflows/ci-cargo.yml/badge.svg)](https://github.com/offscale/cdd-rust/actions/workflows/ci-cargo.yml) |
 | [`cdd-sh`](https://github.com/SamuelMarks/cdd-sh) | Shell (/bin/sh) | Client |  | OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-sh/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-sh/actions/workflows/ci.yml) |
 | [`cdd-swift`](https://github.com/offscale/cdd-swift) | Swift | Client |  | OpenAPI 3.2.0 | [![Swift](https://github.com/SamuelMarks/cdd-swift/actions/workflows/swift.yml/badge.svg)](https://github.com/SamuelMarks/cdd-swift/actions/workflows/swift.yml) |
-| [`cdd-web-ng`](https://github.com/offscale/cdd-web-ng) | TypeScript | Client | Auto-Admin UI; Angular; fetch; Axios; Node.js | OpenAPI 3.2.0 & Swagger 2 | [![Tests and coverage](https://github.com/offscale/cdd-web-ng/actions/workflows/tests_and_coverage.yml/badge.svg)](https://github.com/offscale/cdd-web-ng/actions/workflows/tests_and_coverage.yml) |
+| [`cdd-ts`](https://github.com/offscale/cdd-ts) | TypeScript | Client | Auto-Admin UI; Angular; fetch; Axios; Node.js | OpenAPI 3.2.0 & Swagger 2 | [![Tests and coverage](https://github.com/offscale/cdd-ts/actions/workflows/tests_and_coverage.yml/badge.svg)](https://github.com/offscale/cdd-ts/actions/workflows/tests_and_coverage.yml) |
 
 - **OAI-OpenAPI-Specification**: The official OpenAPI repository used for sourcing raw, versioned test YAML files (`api-with-examples.yaml`, `callback-example.yaml`, `petstore.yaml`, etc.).
 
@@ -53,12 +53,12 @@ This table provides a snapshot of the current local integration capability and t
 | `cdd-java`          | `client`     | ✅ Passed          | ✅ Passed                |
 | `cdd-kotlin`        | `client`     | ❌ Failed          | ✅ Passed                |
 | `cdd-php`           | `client`     | ❌ Failed          | ❌ Failed (Not Impl)     |
-| `cdd-python-client` | `client_cli` | ❌ Failed          | ❌ Failed                |
+| `cdd-python-all` | `client_cli` | ❌ Failed          | ❌ Failed                |
 | `cdd-ruby`          | `client`     | ❌ Failed          | ❌ Failed (Not Impl)     |
 | `cdd-rust`          | `server`     | ✅ Passed          | ✅ Passed                |
 | `cdd-sh`            | `client`     | ✅ Passed          | ✅ Passed                |
 | `cdd-swift`         | `client`     | ❌ Failed          | ❌ Failed                |
-| `cdd-web-ng`        | `client`     | ✅ Passed          | ✅ Passed                |
+| `cdd-ts`        | `client`     | ✅ Passed          | ✅ Passed                |
 
 *(Note: "Not Impl" indicates that the `to_openapi` or `from_openapi` CLI flags are missing or undocumented on older native implementations).*
 
@@ -75,12 +75,12 @@ This repository tests both the native builds and WebAssembly (WASM) targets (if 
 | `cdd-java` | ✅ Yes | ❌ No | Out of scope as per WASM.md |
 | `cdd-kotlin` | ✅ Yes | ❌ No | Unsupported as per WASM.md |
 | `cdd-php` | ✅ Yes | ✅ Yes | |
-| `cdd-python-client` | ✅ Yes | ✅ Yes | |
+| `cdd-python-all` | ✅ Yes | ✅ Yes | |
 | `cdd-ruby` | ✅ Yes | ✅ Yes | |
 | `cdd-rust` | ✅ Yes | ❌ No | Missing WASM support / WASM.md |
 | `cdd-sh` | ✅ Yes | ❌ No | Missing WASM support / WASM.md |
 | `cdd-swift` | ✅ Yes | ❌ No | Missing WASM support / WASM.md |
-| `cdd-web-ng` | ✅ Yes | ❌ No | Missing WASM support / WASM.md |
+| `cdd-ts` | ✅ Yes | ❌ No | Missing WASM support / WASM.md |
 
 ## Setup & CI
 

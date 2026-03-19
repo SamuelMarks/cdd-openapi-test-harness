@@ -1,12 +1,12 @@
 [submodule "cdd-web-ng"]
-	path = cdd-web-ng
-	url = https://github.com/offscale/cdd-web-ng.git
+	path = cdd-ts
+	url = https://github.com/offscale/cdd-ts.git
 [submodule "cdd-kotlin"]
 	path = cdd-kotlin
 	url = https://github.com/offscale/cdd-kotlin.git
 [submodule "cdd-rust"]
 	path = cdd-rust
-	url = https://github.com/offscale/cdd-rust.git
+	url = https://github.com/SamuelMarks/cdd-rust.git
 [submodule "OAI-OpenAPI-Specification"]
 	path = OAI-OpenAPI-Specification
 	url = https://github.com/OAI/OpenAPI-Specification.git
@@ -14,8 +14,8 @@
 	path = cdd-swift
 	url = https://github.com/SamuelMarks/cdd-swift.git
 [submodule "cdd-python-client"]
-	path = cdd-python-client
-	url = https://github.com/offscale/cdd-python-client.git
+	path = cdd-python-all
+	url = https://github.com/offscale/cdd-python-all.git
 [submodule "cdd-csharp"]
 	path = cdd-csharp
 	url = https://github.com/SamuelMarks/cdd-csharp
