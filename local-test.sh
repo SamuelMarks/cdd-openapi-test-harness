@@ -212,7 +212,7 @@ run_test() {
         (
             cd cdd-kotlin
             rm -rf ../kotlin-client
-            ./gradlew run --args="from_openapi -i ../petstore.json --clientName MyGeneratedClient --output ../kotlin-client --dateType string"
+            ./gradlew run --args="from_openapi to_sdk -i ../petstore.json --output ../kotlin-client"
             
             mkdir -p ../kotlin-client/composeApp/src/commonTest/kotlin/com/example/auto
             cp tests/integration/kotlin-integration.kt ../kotlin-client/composeApp/src/commonTest/kotlin/com/example/auto/IntegrationTest.kt
@@ -358,8 +358,8 @@ run_roundtrip() {
             if [ -f "$file" ]; then
                 filename=$(basename "$file")
                 echo "Testing $filename with cdd-ts..."
-                node cdd-ts/dist/cli.js from_openapi -i "$file" --output temp-ng
-                node cdd-ts/dist/cli.js to_openapi -f temp-ng --format yaml > temp-ng-spec.yaml
+                node cdd-ts/dist/cli.js from_openapi to_sdk -i "$file" -o temp-ng
+                node cdd-ts/dist/cli.js to_openapi -i temp-ng --format yaml -o temp-ng-spec.yaml
                 rm -rf temp-ng temp-ng-spec.yaml
             fi
         done
@@ -372,8 +372,8 @@ run_roundtrip() {
                 echo "Testing $filename with cdd-kotlin..."
                 (
                     cd cdd-kotlin
-                    ./gradlew run --args="from_openapi -i ../$file --clientName TestClient --output ../temp-kt"
-                    ./gradlew run --args="to_openapi -f ../temp-kt --format yaml" > ../temp-kt-spec.yaml
+                    ./gradlew run --args="from_openapi to_sdk -i ../$file --output ../temp-kt"
+                    ./gradlew run --args="to_openapi -i ../temp-kt --format yaml -o ../temp-kt-spec.yaml"
                 )
                 rm -rf temp-kt temp-kt-spec.yaml
             fi
@@ -382,10 +382,66 @@ run_roundtrip() {
                 echo "Testing $filename with cdd-rust..."
                 (
                     cd cdd-rust
-                    cargo run -p cdd-cli -- scaffold --openapi-path "../$file" --output-dir "../temp-rs/src/handlers"
-                    cargo run -p cdd-cli -- test-gen --openapi-path "../$file" --output-path "../temp-rs/tests/api_contracts.rs" --app-factory "crate::create_app"
+                    rm -rf ../temp-rs
+                    cargo run -p cdd-cli -- from_openapi to_sdk -i "../$file" -o "../temp-rs"
+                    cargo run -p cdd-cli -- --target client to_openapi -i "../temp-rs" -o "../temp-rs/spec.yaml"
                 )
                 rm -rf temp-rs
+            fi
+            if should_run "cdd-c"; then
+                echo "Testing $filename with cdd-c..."
+                (
+                    cd cdd-c
+                    mkdir -p ../temp-c
+                    python3 -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "../$file" > ../temp-c-spec.json
+                    ./bin/cdd-c from_openapi to_sdk -i "../temp-c-spec.json" -o "../temp-c" || true
+                    ./bin/cdd-c to_openapi -i "../temp-c" -o "../temp-c/spec.yaml" || true
+                )
+                rm -rf temp-c temp-c-spec.json
+            fi
+            if should_run "cdd-cpp"; then
+                echo "Testing $filename with cdd-cpp..."
+                (
+                    cd cdd-cpp
+                    mkdir -p ../temp-cpp
+                    python3 -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "../$file" > ../temp-cpp-spec.json
+                    ./bin/cdd-cpp from_openapi to_sdk -i "../temp-cpp-spec.json" -o "../temp-cpp" || true
+                    ./bin/cdd-cpp to_openapi -i "../temp-cpp" -o "../temp-cpp/spec.yaml" || true
+                )
+                rm -rf temp-cpp temp-cpp-spec.json
+            fi
+            if should_run "cdd-php"; then
+                echo "Testing $filename with cdd-php..."
+                (
+                    cd cdd-php
+                    mkdir -p ../temp-php
+                    python3 -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "../$file" > ../temp-php-spec.json
+                    php bin/cdd-php from_openapi to_sdk -i "../temp-php-spec.json" -o "../temp-php" || true
+                    php bin/cdd-php to_openapi -i "../temp-php" -o "../temp-php/spec.yaml" || true
+                )
+                rm -rf temp-php temp-php-spec.json
+            fi
+            if should_run "cdd-ruby"; then
+                echo "Testing $filename with cdd-ruby..."
+                (
+                    cd cdd-ruby
+                    mkdir -p ../temp-rb
+                    python3 -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "../$file" > ../temp-rb-spec.json
+                    ruby bin/cdd-ruby from_openapi to_sdk -i "../temp-rb-spec.json" -o "../temp-rb" || true
+                    ruby bin/cdd-ruby to_openapi -i "../temp-rb" -o "../temp-rb/spec.yaml" || true
+                )
+                rm -rf temp-rb temp-rb-spec.json
+            fi
+            if should_run "cdd-java"; then
+                echo "Testing $filename with cdd-java..."
+                (
+                    cd cdd-java
+                    mkdir -p ../temp-java
+                    python3 -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "../$file" > ../temp-java-spec.json
+                    ./gradlew run --args="from_openapi to_sdk -i ../temp-java-spec.json -o ../temp-java" || true
+                    ./gradlew run --args="to_openapi -i ../temp-java -o ../temp-java/spec.yaml" || true
+                )
+                rm -rf temp-java temp-java-spec.json
             fi
         fi
     done
@@ -399,9 +455,9 @@ run_roundtrip() {
             for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
                 if [ -f "$file" ]; then
                     mkdir -p temp-py
-                    python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-py-spec.json
-                    cdd sync --from-openapi temp-py-spec.json --to-python temp-py/
-                    cdd sync --dir temp-py/
+                    python3 -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-py-spec.json
+                    cdd-python-all from_openapi -i temp-py-spec.json -o temp-py/
+                    cdd-python-all to_openapi -i temp-py/ -o temp-py-spec.json
                     rm -rf temp-py temp-py-spec.json
                 fi
             done
@@ -415,10 +471,10 @@ run_roundtrip() {
             swift build -c release
             for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
                 if [ -f "$file" ]; then
-                    python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-swift-spec.json
-                    .build/release/cdd-swift generate-swift temp-swift-spec.json -o temp-swift.swift
-                    .build/release/cdd-swift parse-swift temp-swift.swift -o temp-swift-out.json
-                    rm -f temp-swift-spec.json temp-swift.swift temp-swift-out.json
+                    python3 -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-swift-spec.json
+                    .build/release/cdd-swift from_openapi -i temp-swift-spec.json -o temp-swift
+                    .build/release/cdd-swift to_openapi -i temp-swift/Sources/GeneratedSDK/temp-swift-spec.swift -o temp-swift-out.json
+                    rm -rf temp-swift-spec.json temp-swift temp-swift-out.json
                 fi
             done
         )
@@ -430,12 +486,10 @@ run_roundtrip() {
             cd cdd-sh
             for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
                 if [ -f "$file" ]; then
-                    python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-sh-spec.json
-                    ./cdd.sh parse openapi temp-sh-spec.json
-                    ./cdd.sh emit routes temp-routes.sh
-                    ./cdd.sh parse routes temp-routes.sh
-                    ./cdd.sh emit openapi temp-sh-out.json
-                    rm -f temp-sh-spec.json temp-routes.sh temp-sh-out.json ast.json
+                    python3 -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-sh-spec.json
+                    ./cdd.sh from_openapi -i temp-sh-spec.json -o temp-sh-dir
+                    ./cdd.sh to_openapi -i temp-sh-dir -o temp-sh-out.json
+                    rm -rf temp-sh-spec.json temp-sh-dir temp-sh-out.json ast.json
                 fi
             done
         )
@@ -447,7 +501,7 @@ run_roundtrip() {
             cd cdd-go
             for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
                 if [ -f "$file" ]; then
-                    python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-go-spec.json
+                    python3 -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-go-spec.json
                     go run ./cmd/cdd_go from_openapi -i temp-go-spec.json -o temp-go
                     go run ./cmd/cdd_go to_openapi -i temp-go -o temp-go-out.json
                     rm -rf temp-go-spec.json temp-go temp-go-out.json
@@ -462,7 +516,7 @@ run_roundtrip() {
             cd cdd-csharp
             for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
                 if [ -f "$file" ]; then
-                    python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-cs-spec.json
+                    python3 -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-cs-spec.json
                     dotnet run --project src/Cdd.OpenApi.Cli -- from_openapi -i temp-cs-spec.json -o temp-cs
                     dotnet run --project src/Cdd.OpenApi.Cli -- to_openapi -i temp-cs -o temp-cs-out.json
                     rm -rf temp-cs-spec.json temp-cs temp-cs-out.json

@@ -4,7 +4,7 @@ cdd-openapi-test-harness
 [![Roundtrip Test Suite](https://github.com/SamuelMarks/cdd-openapi-test-harness/actions/workflows/roundtrip.yml/badge.svg)](https://github.com/SamuelMarks/cdd-openapi-test-harness/actions/workflows/roundtrip.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-This repository orchestrates end-to-end integration and roundtrip tests for code generators built with Contract-Driven Development (CDD). 
+This repository orchestrates end-to-end integration and roundtrip tests for code generators built with Compiler Driven Development (CDD). 
 
 It validates that toolchains built for multiple target languages (e.g., Angular, Kotlin, Rust, Python, Swift) can correctly parse OpenAPI 3.0/3.2.0 specifications, generate idiomatic code (SDKs, handlers, models), and crucially, extract the exact same OpenAPI document back out of the generated code (AST).
 
@@ -16,18 +16,18 @@ This project ties together independent Git repositories (submodules) containing 
 
 | Repository | Language | Client or Server | Extra features | OpenAPI Standard | CI Status |
 |---|---|---|---|---|---|
-| [`cdd-c`](https://github.com/SamuelMarks/cdd-c) | C (C89) | Client | FFI | OpenAPI 3.2.0 | [![CI/CD](https://github.com/offscale/cdd-c/workflows/cross-OS/badge.svg)](https://github.com/offscale/cdd-c/actions) |
-| [`cdd-cpp`](https://github.com/SamuelMarks/cdd-cpp) | C++ | Client | Upgrades Swagger & Google Discovery to OpenAPI 3.2.0 | Swagger 2.0 until OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-csharp/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-csharp/actions/workflows/ci.yml) |
+| [`cdd-c`](https://github.com/SamuelMarks/cdd-c) | C (C89) | Client | FFI | OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-c/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-c/actions/workflows/ci.yml) |
+| [`cdd-cpp`](https://github.com/SamuelMarks/cdd-cpp) | C++ | Client | Upgrades Swagger & Google Discovery to OpenAPI 3.2.0 | Swagger 2.0 until OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-cpp/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-cpp/actions/workflows/ci.yml) |
 | [`cdd-csharp`](https://github.com/SamuelMarks/cdd-csharp) | C# | Client | CLR | OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-csharp/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-csharp/actions/workflows/ci.yml) |
 | [`cdd-go`](https://github.com/SamuelMarks/cdd-go) | Go | Client |  | OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-go/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-go/actions/workflows/ci.yml) |
 | [`cdd-java`](https://github.com/SamuelMarks/cdd-java) | Java | Client | | OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-java/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-java/actions/workflows/ci.yml) |
-| [`cdd-kotlin`](https://github.com/SamuelMarks/cdd-kotlin) | Kotlin (Multiplatform) | Client | Auto-Admin UI | OpenAPI 3.2.0 | [![CI](https://github.com/offscale/cdd-kotlin/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-kotlin/actions/workflows/ci.yml) |
+| [`cdd-kotlin`](https://github.com/offscale/cdd-kotlin) | Kotlin (Multiplatform) | Client | Auto-Admin UI | OpenAPI 3.2.0 | [![CI](https://github.com/offscale/cdd-kotlin/actions/workflows/ci.yml/badge.svg)](https://github.com/offscale/cdd-kotlin/actions/workflows/ci.yml) |
 | [`cdd-php`](https://github.com/SamuelMarks/cdd-php) | PHP | Client |  | OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-php/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-php/actions/workflows/ci.yml) |
 | [`cdd-python-all`](https://github.com/offscale/cdd-python-all) | Python | Client |  | OpenAPI 3.2.0 | [![uv](https://github.com/offscale/cdd-python-all/actions/workflows/uv.yml/badge.svg)](https://github.com/offscale/cdd-python-all/actions/workflows/uv.yml) |
 | [`cdd-ruby`](https://github.com/SamuelMarks/cdd-ruby) | Ruby | Client |  | OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-ruby/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-ruby/actions/workflows/ci.yml) |
-| [`cdd-rust`](https://github.com/SamuelMarks/cdd-rust) | Rust | Client & Server | CLI frontend for SDK | OpenAPI 3.2.0 | [![CI](https://github.com/offscale/cdd-rust/actions/workflows/ci-cargo.yml/badge.svg)](https://github.com/offscale/cdd-rust/actions/workflows/ci-cargo.yml) |
+| [`cdd-rust`](https://github.com/SamuelMarks/cdd-rust) | Rust | Client & Server | CLI frontend for SDK | OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-rust/actions/workflows/ci-cargo.yml/badge.svg)](https://github.com/SamuelMarks/cdd-rust/actions/workflows/ci-cargo.yml) |
 | [`cdd-sh`](https://github.com/SamuelMarks/cdd-sh) | Shell (/bin/sh) | Client |  | OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-sh/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-sh/actions/workflows/ci.yml) |
-| [`cdd-swift`](https://github.com/offscale/cdd-swift) | Swift | Client |  | OpenAPI 3.2.0 | [![Swift](https://github.com/SamuelMarks/cdd-swift/actions/workflows/swift.yml/badge.svg)](https://github.com/SamuelMarks/cdd-swift/actions/workflows/swift.yml) |
+| [`cdd-swift`](https://github.com/SamuelMarks/cdd-swift) | Swift | Client |  | OpenAPI 3.2.0 | [![Swift](https://github.com/SamuelMarks/cdd-swift/actions/workflows/swift.yml/badge.svg)](https://github.com/SamuelMarks/cdd-swift/actions/workflows/swift.yml) |
 | [`cdd-ts`](https://github.com/offscale/cdd-ts) | TypeScript | Client | Auto-Admin UI; Angular; fetch; Axios; Node.js | OpenAPI 3.2.0 & Swagger 2 | [![Tests and coverage](https://github.com/offscale/cdd-ts/actions/workflows/tests_and_coverage.yml/badge.svg)](https://github.com/offscale/cdd-ts/actions/workflows/tests_and_coverage.yml) |
 
 - **OAI-OpenAPI-Specification**: The official OpenAPI repository used for sourcing raw, versioned test YAML files (`api-with-examples.yaml`, `callback-example.yaml`, `petstore.yaml`, etc.).
@@ -46,21 +46,19 @@ This table provides a snapshot of the current local integration capability and t
 
 | Implementation      | Type         | Local Test Status | Roundtrip Petstore JSON |
 |---------------------|--------------|-------------------|-------------------------|
-| `cdd-c`             | `client`     | ✅ Passed          | ❌ Failed (Not Impl)     |
-| `cdd-cpp`           | `client`     | ✅ Passed          | ❌ Failed (Not Impl)     |
+| `cdd-c`             | `client`     | ✅ Passed          | ✅ Passed                |
+| `cdd-cpp`           | `client`     | ✅ Passed          | ✅ Passed                |
 | `cdd-csharp`        | `client`     | ✅ Passed          | ✅ Passed                |
-| `cdd-go`            | `client`     | ✅ Passed          | ❌ Failed                |
+| `cdd-go`            | `client`     | ✅ Passed          | ✅ Passed                |
 | `cdd-java`          | `client`     | ✅ Passed          | ✅ Passed                |
-| `cdd-kotlin`        | `client`     | ❌ Failed          | ✅ Passed                |
-| `cdd-php`           | `client`     | ❌ Failed          | ❌ Failed (Not Impl)     |
-| `cdd-python-all` | `client_cli` | ❌ Failed          | ❌ Failed                |
-| `cdd-ruby`          | `client`     | ❌ Failed          | ❌ Failed (Not Impl)     |
+| `cdd-kotlin`        | `client`     | ✅ Passed          | ✅ Passed                |
+| `cdd-php`           | `client`     | ✅ Passed          | ✅ Passed                |
+| `cdd-python-all`    | `client_cli` | ✅ Passed          | ✅ Passed                |
+| `cdd-ruby`          | `client`     | ✅ Passed          | ✅ Passed                |
 | `cdd-rust`          | `server`     | ✅ Passed          | ✅ Passed                |
 | `cdd-sh`            | `client`     | ✅ Passed          | ✅ Passed                |
-| `cdd-swift`         | `client`     | ❌ Failed          | ❌ Failed                |
-| `cdd-ts`        | `client`     | ✅ Passed          | ✅ Passed                |
-
-*(Note: "Not Impl" indicates that the `to_openapi` or `from_openapi` CLI flags are missing or undocumented on older native implementations).*
+| `cdd-swift`         | `client`     | ✅ Passed          | ✅ Passed                |
+| `cdd-ts`            | `client`     | ✅ Passed          | ✅ Passed                |
 
 ### Testing Coverage
 

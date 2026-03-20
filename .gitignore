@@ -12,3 +12,9 @@ temp-*
 
 # OS files
 .DS_Store
+
+# Temporary scripts/test payloads
+test.json
+test_from_openapi.swift
+update_cli.py
+
