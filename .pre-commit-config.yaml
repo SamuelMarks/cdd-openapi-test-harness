@@ -1,0 +1,10 @@
+repos:
+  - repo: local
+    hooks:
+      - id: update-readme-status
+        name: Update README status
+        entry: ./scripts/update_readme_status.py
+        language: script
+        pass_filenames: false
+        # Run whenever test scripts or submodule code changes
+        files: '^(local-test\.sh|cdd-.*/.*)$'
