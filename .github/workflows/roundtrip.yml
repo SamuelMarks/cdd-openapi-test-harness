@@ -575,3 +575,11 @@ echo "==================================="
           echo "==================================="
           cd cdd-ruby && make build_wasm && cd ..
           fi
+
+      - name: Verify Compliance Dashboard
+        run: |
+          ./scripts/generate_dashboard.sh
+          if ! git diff --exit-code COMPLIANCE.md; then
+            echo "Error: COMPLIANCE.md is out of date. Please run ./scripts/generate_dashboard.sh and commit the changes."
+            exit 1
+          fi
