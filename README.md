@@ -60,6 +60,13 @@ This table provides a snapshot of the current local integration capability and t
 | `cdd-swift`         | `client`     | ✅ Passed          | ✅ Passed                |
 | `cdd-ts`            | `client`     | ✅ Passed          | ✅ Passed                |
 
+### Feature Compliance & Conformance Testing
+
+To track granular OpenAPI 3.2.0 feature implementations (like `$ref` support, Webhooks, or Callbacks) across the toolchains:
+
+1. **Dashboard:** See [ECOSYSTEM_COMPLIANCE_OAS_3_2_0.md](ECOSYSTEM_COMPLIANCE_OAS_3_2_0.md) for a synthesized compatibility dashboard generated locally based on each submodule's claims.
+2. **Strict Conformance:** For strict structural verification, this repository provides deep AST-validation scripts (`scripts/check_all_conformance.sh`). These scripts execute exhaustive testing across the CDD toolchains to dynamically update tables in the sibling `openapi-conformance` project based on proven AST extraction capabilities. See `USAGE.md` for execution instructions.
+
 ### Testing Coverage
 
 This repository tests both the native builds and WebAssembly (WASM) targets (if supported by the implementation's `WASM.md`).

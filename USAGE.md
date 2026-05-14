@@ -204,3 +204,31 @@ If you want to isolate tests, you can leverage three powerful environment variab
    # Test only the server generators
    TARGET_TYPE="server" ./local-test.sh roundtrip
    ```
+
+## 5. OpenAPI Conformance Testing
+
+This repository includes a universal OpenAPI 3.2.0 conformance testing suite that relies on deep AST object extraction. These scripts verify exactly which OpenAPI features (e.g., `Server Object`, `Security Scheme Object`, `Reference Object`) are preserved and supported when a toolchain parses a spec into code and re-extracts it.
+
+The outputs are written directly into tracking markdown tables (like those in the `openapi-conformance` sibling repository).
+
+### Running Batch Conformance
+
+To automatically build and test every `cdd-*` submodule for its conformance levels, execute:
+
+```sh
+./scripts/check_all_conformance.sh
+```
+
+This will run through a suite of test YAML files from `OAI-OpenAPI-Specification`, attempt the bidirectional `from_openapi` -> `to_openapi` mapping, and tally up the features successfully emitted by the AST extractors.
+
+### Checking a Specific Project
+
+If you want to check a specific project or debug an extraction failure, you can use the wrapper script. It requires the project directory, the output markdown file, and the CLI execution sequence for the toolchain:
+
+```sh
+# Example: Checking cdd-rust compliance
+./scripts/check_conformance_project.sh cdd-rust ../openapi-conformance/openapi-3.2.0/client-sdk.md ./target/release/cdd-cli
+
+# Example: Checking cdd-ts compliance
+./scripts/check_conformance_project.sh cdd-ts ../openapi-conformance/openapi-3.2.0/client-sdk.md node dist/cli.js
+```
