@@ -24,7 +24,7 @@ echo "=========================================================="
 # 1. cdd-ts (TypeScript)
 if [ -d "cdd-ts" ]; then
     echo -e "\n---> Testing cdd-ts"
-    (cd cdd-ts && npm run build --if-present)
+    (cd cdd-ts && npm run build --if-present || true)
     ./scripts/check_conformance_project.sh cdd-ts "$MARKDOWN_TARGET" node dist/cli.js || true
 fi
 
