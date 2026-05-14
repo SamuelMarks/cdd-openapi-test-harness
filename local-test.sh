@@ -360,10 +360,7 @@ INNER_EOF
             composer test || echo "cdd-php sdk tests failed"
         )
     fi
-
-    if should_run "cdd-ruby"; then
-        echo "==================================="
-        echo "Running cdd-ruby tests"
+    fi
         echo "==================================="
         (
             cd cdd-ruby
