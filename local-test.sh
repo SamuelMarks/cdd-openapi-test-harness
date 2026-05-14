@@ -272,9 +272,18 @@ INNER_EOF
         echo "==================================="
         (
             cd cdd-csharp
+            # 1. Run internal toolchain unit tests
             dotnet restore
             dotnet build --no-restore
             dotnet test tests/Cdd.OpenApi.Tests --no-build
+            
+            # 2. Generate the standalone SDK from the root petstore spec
+            rm -rf ../cdd-csharp-client
+            dotnet run --project src/Cdd.OpenApi.Cli/Cdd.OpenApi.Cli.csproj -f net10.0 -- from_openapi to_sdk -i ../petstore.json -o ../cdd-csharp-client
+            
+            # 3. Enter the generated SDK, configure it, build it, and run integration tests
+            cd ../cdd-csharp-client
+            dotnet test GeneratedProject.sln
         )
     fi
 
@@ -332,7 +341,19 @@ INNER_EOF
         echo "==================================="
         (
             cd cdd-cpp
-            make test
+            
+            # 1. Run internal toolchain unit tests
+            make test 
+            
+            # 2. Generate the standalone SDK from the root petstore spec
+            rm -rf ../cdd-cpp-client
+            ./build/cdd-cpp from_openapi to_sdk -i ../petstore.json -o ../cdd-cpp-client --tests
+            
+            # 3. Enter the generated SDK, configure it, build it, and run integration tests
+            cd ../cdd-cpp-client
+            cmake . -DFETCHCONTENT_UPDATES_DISCONNECTED=ON
+            cmake --build .
+            ctest --output-on-failure
         )
     fi 
 
@@ -360,7 +381,10 @@ INNER_EOF
             composer test || echo "cdd-php sdk tests failed"
         )
     fi
-    fi
+
+    if should_run "cdd-ruby"; then
+        echo "==================================="
+        echo "Running cdd-ruby tests"
         echo "==================================="
         (
             cd cdd-ruby
