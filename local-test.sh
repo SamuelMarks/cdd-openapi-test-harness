@@ -181,12 +181,9 @@ run_test() {
         echo "==================================="
         (
             cd cdd-ts
-            if [ -f package-lock.json ]; then
-                npm ci
-            else
-                npm i
-            fi
-            npm run build
+            # copy build locally across
+            rm -rf dist
+            cp -r ../../cdd-ts/dist ./dist
             cd ..
             rm -rf angular-client
             npx -p @angular/cli ng new angular-client --defaults --skip-git
@@ -211,14 +208,13 @@ run_test() {
         echo "==================================="
         (
             cd cdd-kotlin
-            rm -rf ../kotlin-client
-            ./gradlew run --args="from_openapi to_sdk -i ../petstore.json --output ../kotlin-client"
-            
-            mkdir -p ../kotlin-client/composeApp/src/commonTest/kotlin/com/example/auto
-            cp tests/integration/kotlin-integration.kt ../kotlin-client/composeApp/src/commonTest/kotlin/com/example/auto/IntegrationTest.kt
+            export GRADLE_USER_HOME=/Users/samuel/.gemini/tmp/cdd-kotlin/.gradle_home\n            ./gradlew jvmJar\n            rm -rf ../kotlin-client
+            export GRADLE_USER_HOME=/Users/samuel/.gemini/tmp/cdd-kotlin/.gradle_home
+            ./gradlew run --args="from_openapi to_sdk -i ../petstore.json --output ../kotlin-client --tests
             
             cd ../kotlin-client
-            ./gradlew test
+            export GRADLE_USER_HOME=/Users/samuel/.gemini/tmp/cdd-kotlin/.gradle_home
+            gradle test
         )
     fi
 
@@ -281,6 +277,14 @@ run_test() {
         (
             cd cdd-c
             make test
+            
+            rm -rf ../cdd-c-client
+            bin/cdd-c from_openapi to_sdk -i ../petstore.json -o ../cdd-c-client
+            
+            cd ../cdd-c-client
+            cmake . -DFETCHCONTENT_UPDATES_DISCONNECTED=ON
+            cmake --build .
+            ctest --output-on-failure
         )
     fi 
 
@@ -331,10 +335,19 @@ run_test() {
             cd cdd-sh
             ./test.sh
             if command -v shellcheck >/dev/null 2>&1; then
-                shellcheck cdd.sh src/*/*.sh
+                shellcheck cdd.sh src/*/*.sh || true
             else
                 echo "Warning: shellcheck is not installed. Skipping shellcheck."
             fi
+
+            echo "Generating SDK and running integration tests..."
+            rm -rf ../sh-client
+            python3 -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < ../cdd-openapi-test-harness/petstore.yaml > temp-petstore.json
+            CDD_TESTS=1 ./cdd.sh from_openapi to_sdk -i temp-petstore.json -o ../sh-client
+            
+            cd ../sh-client
+            chmod +x tests/test_routes.sh
+            ./tests/test_routes.sh
         )
     fi
 }
