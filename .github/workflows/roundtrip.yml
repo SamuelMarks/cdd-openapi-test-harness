@@ -579,7 +579,7 @@ echo "==================================="
       - name: Verify Compliance Dashboard
         run: |
           ./scripts/generate_dashboard.sh
-          if ! git diff --exit-code COMPLIANCE.md; then
-            echo "Error: COMPLIANCE.md is out of date. Please run ./scripts/generate_dashboard.sh and commit the changes."
+          if ! git diff --exit-code ECOSYSTEM_COMPLIANCE_OAS_3_2_0.md; then
+            echo "Error: ECOSYSTEM_COMPLIANCE_OAS_3_2_0.md is out of date. Please run ./scripts/generate_dashboard.sh and commit the changes."
             exit 1
           fi

@@ -7,7 +7,7 @@
 set -e
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUTPUT_FILE="$ROOT_DIR/COMPLIANCE.md"
+OUTPUT_FILE="$ROOT_DIR/ECOSYSTEM_COMPLIANCE_OAS_3_2_0.md"
 
 cd "$ROOT_DIR"
 
