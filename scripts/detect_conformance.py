@@ -273,11 +273,12 @@ def walk_openapi_doc(in_node, out_node):
             if k == 'externalDocs': walk_external_docs(in_node[k], out_node[k])
 
 def load_doc(path):
-    with open(path, 'r') as f:
-        if path.endswith('.yaml') or path.endswith('.yml'):
-            return yaml.safe_load(f)
-        else:
-            return json.load(f)
+    with open(path, 'r', encoding='utf-8') as f:
+        content = f.read()
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        return yaml.safe_load(content)
 
 def main():
     parser = argparse.ArgumentParser(description='Detect OpenAPI 3.2.0 conformance.')

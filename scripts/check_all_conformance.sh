@@ -31,15 +31,15 @@ fi
 # 2. cdd-c (C)
 if [ -d "cdd-c" ]; then
     echo -e "\n---> Testing cdd-c"
-    (cd cdd-c && make build_cdd)
+    (cd cdd-c && make)
     ./scripts/check_conformance_project.sh cdd-c "$MARKDOWN_TARGET" ./bin/cdd-c || true
 fi
 
 # 3. cdd-cpp (C++)
 if [ -d "cdd-cpp" ]; then
     echo -e "\n---> Testing cdd-cpp"
-    (cd cdd-cpp && make)
-    ./scripts/check_conformance_project.sh cdd-cpp "$MARKDOWN_TARGET" ./bin/cdd-cpp || true
+    (cd cdd-cpp && make build)
+    ./scripts/check_conformance_project.sh cdd-cpp "$MARKDOWN_TARGET" ./build/cdd-cpp || true
 fi
 
 # 4. cdd-csharp (C#)
@@ -52,7 +52,7 @@ fi
 # 5. cdd-go (Go)
 if [ -d "cdd-go" ]; then
     echo -e "\n---> Testing cdd-go"
-    (cd cdd-go && go build -o bin/cdd_go ./cmd/cdd_go)
+    (cd cdd-go && go build -o bin/cdd_go ./cmd/cdd-go)
     ./scripts/check_conformance_project.sh cdd-go "$MARKDOWN_TARGET" ./bin/cdd_go || true
 fi
 

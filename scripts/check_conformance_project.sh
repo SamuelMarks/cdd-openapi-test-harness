@@ -55,6 +55,11 @@ for spec_file in "$SPEC_DIR"/*.yaml; do
         # Determine the entrypoint for to_openapi (usually the directory, sometimes a specific file)
         # We will assume the directory works for most CDD tools
         EXTRACT_INPUT="$TEMP_SDK_DIR"
+        # Search for snapshot dir if needed (specifically for TS which outputs to src)
+        if [ -d "$TEMP_SDK_DIR/src" ] && [ -f "$TEMP_SDK_DIR/src/openapi.snapshot.json" ]; then
+            EXTRACT_INPUT="$TEMP_SDK_DIR/src"
+        fi
+        
         # Special case for cdd-swift which requires pointing to the generated swift file
         if [ "$PROJECT_DIR" = "cdd-swift" ]; then
             EXTRACT_INPUT="$TEMP_SDK_DIR/Sources/GeneratedSDK/temp-input.swift"
