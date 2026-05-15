@@ -403,6 +403,11 @@ INNER_EOF
         (
             cd cdd-java
             make test
+            make build
+            rm -rf ../cdd-java-client
+            java -cp "lib/*:bin" cli.Main from_openapi to_sdk -i ../petstore.json --tests -o ../cdd-java-client
+            cd ../cdd-java-client
+            mvn test
         )
     fi
     if should_run "cdd-php"; then

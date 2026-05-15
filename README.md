@@ -46,19 +46,19 @@ This table provides a snapshot of the current local integration capability and t
 
 | Implementation      | Type         | Local Test Status | Roundtrip Petstore JSON |
 |---------------------|--------------|-------------------|-------------------------|
-| `cdd-c`             | `client`     | ✅ Passed          | ✅ Passed                |
-| `cdd-cpp`           | `client`     | ✅ Passed          | ✅ Passed                |
-| `cdd-csharp`        | `client`     | ✅ Passed          | ✅ Passed                |
-| `cdd-go`            | `client`     | ✅ Passed          | ✅ Passed                |
+| `cdd-c`             | `client`     | ❌ Failed          | ✅ Passed                |
+| `cdd-cpp`           | `client`     | ❌ Failed          | ✅ Passed                |
+| `cdd-csharp`        | `client`     | ❌ Failed          | ✅ Passed                |
+| `cdd-go`            | `client`     | ❌ Failed          | ❌ Failed                |
 | `cdd-java`          | `client`     | ✅ Passed          | ✅ Passed                |
-| `cdd-kotlin`        | `client`     | ✅ Passed          | ✅ Passed                |
-| `cdd-php`           | `client`     | ✅ Passed          | ✅ Passed                |
-| `cdd-python-all`    | `client_cli` | ✅ Passed          | ✅ Passed                |
+| `cdd-kotlin`        | `client`     | ❌ Failed          | ❌ Failed                |
+| `cdd-php`           | `client`     | ❌ Failed          | ✅ Passed                |
+| `cdd-python-all`    | `client_cli` | ❌ Failed          | ❌ Failed                |
 | `cdd-ruby`          | `client`     | ✅ Passed          | ✅ Passed                |
-| `cdd-rust`          | `server`     | ✅ Passed          | ✅ Passed                |
-| `cdd-sh`            | `client`     | ✅ Passed          | ✅ Passed                |
+| `cdd-rust`          | `server`     | ✅ Passed          | ❌ Failed                |
+| `cdd-sh`            | `client`     | ❌ Failed          | ✅ Passed                |
 | `cdd-swift`         | `client`     | ✅ Passed          | ✅ Passed                |
-| `cdd-ts`            | `client`     | ✅ Passed          | ✅ Passed                |
+| `cdd-ts`            | `client`     | ❌ Failed          | ❌ Failed                |
 
 ### Feature Compliance & Conformance Testing
 
