@@ -1,9 +1,39 @@
 # Project-specific ignores
 emsdk/
-angular-client/
-kotlin-client/
-temp*
-temp-*
+*-client/
+*client/
+cdd-openapi-test-harness
+
+# Build and Output Directories
+build/
+build_cmake/
+bin/
+obj/
+out/
+out_src/
+target/
+node_modules/
+__pycache__/
+
+# Compiled objects and libraries
+*.o
+*.a
+*.so
+*.dylib
+*.exe
+*.dll
+*.pyc
+*.pyo
+
+# CMake specific
+CMakeCache.txt
+CMakeFiles/
+_deps/
+Makefile
+
+# Caches and logs
+.pytest_cache/
+*.log
 
 # IDE files
 .idea/
@@ -17,4 +47,9 @@ temp-*
 test.json
 test_from_openapi.swift
 update_cli.py
+temp*
+temp-*
+docker
+mock_nginx.py
+
 

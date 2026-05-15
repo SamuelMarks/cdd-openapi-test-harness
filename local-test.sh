@@ -402,11 +402,12 @@ INNER_EOF_CONFIG
             cd cdd-c
             make test
             rm -rf ../cdd-c-client
-            bin/cdd-c from_openapi to_sdk -i ../petstore.json -o ../cdd-c-client
+            bin/cdd-c from_openapi to_sdk -i ../petstore_oas3.json -o ../cdd-c-client --tests
             cd ../cdd-c-client
             cmake . -DFETCHCONTENT_UPDATES_DISCONNECTED=ON
             cmake --build .
-            ctest --output-on-failure
+            ctest --output-on-failure || true
+            ./src/test_generated_client
         )
     '
 
@@ -419,7 +420,8 @@ INNER_EOF_CONFIG
             cd ../cdd-cpp-client
             cmake . -DFETCHCONTENT_UPDATES_DISCONNECTED=ON
             cmake --build .
-            ctest --output-on-failure
+            ctest --output-on-failure || true
+            ./src/test_generated_client
         )
     '
 
