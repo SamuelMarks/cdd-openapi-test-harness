@@ -57,7 +57,7 @@ This table provides a snapshot of the current local integration capability and t
 | `cdd-ruby`          | `client`     | ❌ Failed          | ✅ Passed                |
 | `cdd-rust`          | `server`     | ❌ Failed          | ❌ Failed                |
 | `cdd-sh`            | `client`     | ❌ Failed          | ✅ Passed                |
-| `cdd-swift`         | `client`     | ✅ Passed          | ✅ Passed                |
+| `cdd-swift`         | `client`     | ❌ Failed          | ✅ Passed                |
 | `cdd-ts`            | `client`     | ❌ Failed          | ❌ Failed                |
 
 ### Feature Compliance & Conformance Testing

@@ -368,6 +368,15 @@ INNER_EOF
         echo "==================================="
         (
             cd cdd-swift
+            # 1. Run internal toolchain unit tests
+            make test 
+            
+            # 2. Generate the standalone SDK using the OAS3 Petstore spec
+            rm -rf ../cdd-swift-client
+            swift run cdd-swift from_openapi to_sdk -i ../petstore_oas3.json -o ../cdd-swift-client --tests
+            
+            # 3. Enter the generated SDK and run the integration test suite
+            cd ../cdd-swift-client
             swift test
         )
     fi
