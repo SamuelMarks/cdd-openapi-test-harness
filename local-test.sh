@@ -349,6 +349,15 @@ INNER_EOF
         echo "==================================="
         (
             cd cdd-rust
+            # 1. Run internal toolchain unit tests
+            cargo test
+            
+            # 2. Generate the standalone SDK from the root petstore spec
+            rm -rf ../cdd-rust-client
+            cargo run -p cdd-cli --bin cdd-rust -- from_openapi to_sdk -i ../petstore.json -o ../cdd-rust-client --tests
+            
+            # 3. Enter the generated SDK, configure it, build it, and run integration tests
+            cd ../cdd-rust-client
             cargo test
         )
     fi
@@ -439,9 +448,21 @@ INNER_EOF
         echo "==================================="
         (
             cd cdd-ruby
-            make test
+            # 1. Run internal toolchain unit tests
+            bundle install
+            bundle exec rspec
+            
+            # 2. Generate the standalone SDK from the root petstore spec
+            rm -rf ../cdd-ruby-client
+            bin/cdd-ruby from_openapi to_sdk -i ../petstore.json -o ../cdd-ruby-client
+            
+            # 3. Enter the generated SDK, install dependencies, and run integration tests
+            cd ../cdd-ruby-client
+            bundle install
+            bundle exec rspec
         )
-    fi 
+    fi
+
 
     if should_run "cdd-sh"; then
         echo "==================================="
@@ -512,6 +533,15 @@ run_roundtrip() {
                 echo "Testing $filename with cdd-rust..."
                 (
                     cd cdd-rust
+            # 1. Run internal toolchain unit tests
+            cargo test
+            
+            # 2. Generate the standalone SDK from the root petstore spec
+            rm -rf ../cdd-rust-client
+            cargo run -p cdd-cli --bin cdd-rust -- from_openapi to_sdk -i ../petstore.json -o ../cdd-rust-client --tests
+            
+            # 3. Enter the generated SDK, configure it, build it, and run integration tests
+            cd ../cdd-rust-client
                     rm -rf ../temp-rs
                     cargo run -p cdd-cli -- from_openapi to_sdk -i "../$file" -o "../temp-rs"
                     cargo run -p cdd-cli -- --target client to_openapi -i "../temp-rs" -o "../temp-rs/spec.yaml"
