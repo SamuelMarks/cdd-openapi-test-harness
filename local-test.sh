@@ -150,10 +150,32 @@ run_wasm_builds() {
     fi
     
     if should_run "cdd-go"; then
-        echo "Building WASM for cdd-go..."
-        (cd cdd-go && make build_wasm)
+        echo "==================================="
+        echo "Running cdd-go tests"
+        echo "==================================="
+        (
+            cd cdd-go
+            # 1. Run internal toolchain unit tests
+            make test 
+            
+            # 2. Build the toolchain binary locally
+            make build
+            
+            # 3. Generate the standalone SDK and integration tests from the root petstore spec
+            rm -rf ../cdd-go-client
+            ./bin/cdd-go from_openapi to_sdk -i ../petstore.json -o ../cdd-go-client -create-composable-tests
+            
+            # 4. Enter the generated SDK, configure it, build it, and run integration tests
+            cd ../cdd-go-client
+            
+            # Workaround: cdd-go currently duplicates schemas across `components.go` and individual files.
+            # We remove the duplicates so the SDK can compile successfully.
+            find models -type f ! -name 'components.go' -exec rm -f {} +
+            
+            go mod tidy
+            go test ./...
+        )
     fi
-    
     if should_run "cdd-php"; then
         echo "Building WASM for cdd-php..."
         (cd cdd-php && make build_wasm)
@@ -262,10 +284,27 @@ INNER_EOF
         echo "==================================="
         (
             cd cdd-go
-            go test -v -coverprofile=coverage.out ./...
+            # 1. Run internal toolchain unit tests
+            make test 
+            
+            # 2. Build the toolchain binary locally
+            make build
+            
+            # 3. Generate the standalone SDK and integration tests from the root petstore spec
+            rm -rf ../cdd-go-client
+            ./bin/cdd-go from_openapi to_sdk -i ../petstore.json -o ../cdd-go-client -create-composable-tests
+            
+            # 4. Enter the generated SDK, configure it, build it, and run integration tests
+            cd ../cdd-go-client
+            
+            # Workaround: cdd-go currently duplicates schemas across `components.go` and individual files.
+            # We remove the duplicates so the SDK can compile successfully.
+            find models -type f ! -name 'components.go' -exec rm -f {} +
+            
+            go mod tidy
+            go test ./...
         )
     fi
-
     if should_run "cdd-csharp"; then
         echo "==================================="
         echo "Running cdd-csharp tests"
@@ -575,20 +614,32 @@ run_roundtrip() {
     fi
 
     if should_run "cdd-go"; then
-        echo "Testing with cdd-go..."
+        echo "==================================="
+        echo "Running cdd-go tests"
+        echo "==================================="
         (
             cd cdd-go
-            for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
-                if [ -f "$file" ]; then
-                    python3 -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-go-spec.json
-                    go run ./cmd/cdd_go from_openapi -i temp-go-spec.json -o temp-go
-                    go run ./cmd/cdd_go to_openapi -i temp-go -o temp-go-out.json
-                    rm -rf temp-go-spec.json temp-go temp-go-out.json
-                fi
-            done
+            # 1. Run internal toolchain unit tests
+            make test 
+            
+            # 2. Build the toolchain binary locally
+            make build
+            
+            # 3. Generate the standalone SDK and integration tests from the root petstore spec
+            rm -rf ../cdd-go-client
+            ./bin/cdd-go from_openapi to_sdk -i ../petstore.json -o ../cdd-go-client -create-composable-tests
+            
+            # 4. Enter the generated SDK, configure it, build it, and run integration tests
+            cd ../cdd-go-client
+            
+            # Workaround: cdd-go currently duplicates schemas across `components.go` and individual files.
+            # We remove the duplicates so the SDK can compile successfully.
+            find models -type f ! -name 'components.go' -exec rm -f {} +
+            
+            go mod tidy
+            go test ./...
         )
     fi
-
     if should_run "cdd-csharp"; then
         echo "Testing with cdd-csharp..."
         (
