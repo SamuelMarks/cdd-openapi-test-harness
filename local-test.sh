@@ -333,6 +333,13 @@ INNER_EOF
         (
             cd cdd-python-all
             make test
+            rm -rf ../cdd-python-client
+            uv run python -m openapi_client.cli from_openapi to_sdk -i ../petstore.json -o ../cdd-python-client
+            cd ../cdd-python-client
+            python3 -m venv .venv
+            source .venv/bin/activate
+            pip install -e .[dev]
+            pytest test/
         )
     fi
 
