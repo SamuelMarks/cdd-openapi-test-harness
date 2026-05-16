@@ -68,7 +68,7 @@ fi
 if [ -d "cdd-kotlin" ]; then
     echo -e "\n---> Testing cdd-kotlin"
     # Similar to Java, Kotlin uses gradlew
-    ./scripts/check_conformance_project.sh cdd-kotlin "$MARKDOWN_TARGET" ./bin/cdd-kotlin || true
+    ./scripts/check_conformance_project.sh cdd-kotlin "$MARKDOWN_TARGET" ./cdd.sh || true
 fi
 
 # 8. cdd-php (PHP)
