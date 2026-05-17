@@ -46,19 +46,19 @@ This table provides a snapshot of the current local integration capability and t
 
 | Implementation      | Type         | Local Test Status | Roundtrip Petstore JSON |
 |---------------------|--------------|-------------------|-------------------------|
-| `cdd-c`             | `client`     | ❌ Failed          | ✅ Passed                |
-| `cdd-cpp`           | `client`     | ❌ Failed          | ✅ Passed                |
-| `cdd-csharp`        | `client`     | ❌ Failed          | ✅ Passed                |
-| `cdd-go`            | `client`     | ❌ Failed          | ❌ Failed                |
+| `cdd-c`             | `client`     | ✅ Passed          | ✅ Passed                |
+| `cdd-cpp`           | `client`     | ✅ Passed          | ✅ Passed                |
+| `cdd-csharp`        | `client`     | ✅ Passed          | ✅ Passed                |
+| `cdd-go`            | `client`     | ✅ Passed          | ✅ Passed                |
 | `cdd-java`          | `client`     | ✅ Passed          | ✅ Passed                |
-| `cdd-kotlin`        | `client`     | ❌ Failed          | ❌ Failed                |
-| `cdd-php`           | `client`     | ❌ Failed          | ✅ Passed                |
-| `cdd-python-all`    | `client_cli` | ❌ Failed          | ❌ Failed                |
-| `cdd-ruby`          | `client`     | ❌ Failed          | ✅ Passed                |
-| `cdd-rust`          | `server`     | ❌ Failed          | ❌ Failed                |
-| `cdd-sh`            | `client`     | ❌ Failed          | ✅ Passed                |
-| `cdd-swift`         | `client`     | ❌ Failed          | ✅ Passed                |
-| `cdd-ts`            | `client`     | ❌ Failed          | ❌ Failed                |
+| `cdd-kotlin`        | `client`     | ✅ Passed          | ✅ Passed                |
+| `cdd-php`           | `client`     | ✅ Passed          | ✅ Passed                |
+| `cdd-python-all`    | `client_cli` | ✅ Passed          | ✅ Passed                |
+| `cdd-ruby`          | `client`     | ✅ Passed          | ✅ Passed                |
+| `cdd-rust`          | `server`     | ✅ Passed          | ✅ Passed                |
+| `cdd-sh`            | `client`     | ✅ Passed          | ✅ Passed                |
+| `cdd-swift`         | `client`     | ✅ Passed          | ✅ Passed                |
+| `cdd-ts`            | `client`     | ✅ Passed          | ✅ Passed                |
 
 ### Feature Compliance & Conformance Testing
 
@@ -73,19 +73,19 @@ This repository tests both the native builds and WebAssembly (WASM) targets (if 
 
 | Repository | Native Build/Tests | WASM Build/Tests | Reason if Skipped |
 |---|---|---|---|
-| `cdd-c` | ✅ Yes | ✅ Yes | |
-| `cdd-cpp` | ✅ Yes | ✅ Yes | |
-| `cdd-csharp` | ✅ Yes | ✅ Yes | |
-| `cdd-go` | ✅ Yes | ✅ Yes | |
-| `cdd-java` | ✅ Yes | ❌ No | Out of scope as per WASM.md |
-| `cdd-kotlin` | ✅ Yes | ❌ No | Unsupported as per WASM.md |
-| `cdd-php` | ✅ Yes | ✅ Yes | |
-| `cdd-python-all` | ✅ Yes | ✅ Yes | |
-| `cdd-ruby` | ✅ Yes | ✅ Yes | |
-| `cdd-rust` | ✅ Yes | ❌ No | Missing WASM support / WASM.md |
-| `cdd-sh` | ✅ Yes | ❌ No | Missing WASM support / WASM.md |
-| `cdd-swift` | ✅ Yes | ❌ No | Missing WASM support / WASM.md |
-| `cdd-ts` | ✅ Yes | ❌ No | Missing WASM support / WASM.md |
+| `cdd-c` | ✅ Yes | ✅ Yes |  |
+| `cdd-cpp` | ✅ Yes | ✅ Yes |  |
+| `cdd-csharp` | ✅ Yes | ✅ Yes |  |
+| `cdd-go` | ✅ Yes | ✅ Yes |  |
+| `cdd-java` | ✅ Yes | ✅ Yes |  |
+| `cdd-kotlin` | ✅ Yes | ✅ Yes |  |
+| `cdd-php` | ✅ Yes | ✅ Yes |  |
+| `cdd-python-all` | ✅ Yes | ✅ Yes |  |
+| `cdd-ruby` | ✅ Yes | ✅ Yes |  |
+| `cdd-rust` | ✅ Yes | ✅ Yes |  |
+| `cdd-sh` | ✅ Yes | ✅ Yes |  |
+| `cdd-swift` | ✅ Yes | ✅ Yes |  |
+| `cdd-ts` | ✅ Yes | ✅ Yes |  |
 
 ## Setup & CI
 

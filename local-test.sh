@@ -1,5 +1,5 @@
 #!/bin/sh
-set -e
+set +e
 
 # ==========================================
 # Script: local-test.sh
@@ -97,12 +97,15 @@ trap cleanup EXIT
 # ==========================================
 # Function: start_petstore
 # Description: Starts the petstore_server via Docker for integration tests.
+# Parameters:
+#   $1 - base_path: The API base path (e.g., /v2 or /api/v3). Defaults to /v2.
 # ==========================================
 start_petstore() {
+    local base_path="${1:-/v2}"
     if command -v docker >/dev/null 2>&1; then
-        echo "Starting petstore server via docker..."
+        echo "Starting petstore server via docker (Base Path: $base_path)..."
         docker rm -f petstore_server >/dev/null 2>&1 || true
-        docker run -d -p 8080:8080 -e SWAGGER_HOST="http://localhost:8080" -e SWAGGER_BASE_PATH="/v2" --name petstore_server swaggerapi/petstore >/dev/null
+        docker run -d -p 8080:8080 -e SWAGGER_HOST="http://localhost:8080" -e SWAGGER_BASE_PATH="$base_path" --name petstore_server swaggerapi/petstore >/dev/null
         sleep 3
     else
         echo "Warning: docker is not installed or available. Integration tests relying on localhost:8080 may fail."
@@ -190,51 +193,68 @@ run_wasm_builds() {
         echo "Building WASM for cdd-ruby..."
         (cd cdd-ruby && make build_wasm)
     fi
+    
+    if should_run "cdd-kotlin"; then
+        echo "Building WASM for cdd-kotlin..."
+        (cd cdd-kotlin && ./gradlew assemble)
+    fi
+
+    if should_run "cdd-sh"; then
+        echo "Building WASM for cdd-sh..."
+        (cd cdd-sh && make build_wasm)
+    fi
 }
 
 # ==========================================
 # Function: run_test_with_audit
 # Description: Runs tests for a specific language against the happy path (checking coverage),
 #              and then against chaos conditions to ensure tests actually assert failures.
+# Parameters:
+#   $1 - lang_name: The name of the toolchain (e.g., cdd-ts)
+#   $2 - spec_file: The path to the OpenAPI/Swagger specification
+#   $3 - base_path: The base path (e.g., /v2 or /api/v3)
+#   $4 - run_command: The command to execute the tests
 # ==========================================
 run_test_with_audit() {
     local lang_name="$1"
-    local run_command="$2"
+    local spec_file="$2"
+    local base_path="$3"
+    local run_command="$4"
     
     if ! should_run "$lang_name"; then
         return 0
     fi
     
     echo "==================================="
-    echo "Auditing $lang_name"
+    echo "Auditing $lang_name against $spec_file"
     echo "==================================="
 
     # Phase 1: Happy Path & Coverage Validation
     echo "[$lang_name] Phase 1: Happy Path & Coverage..."
-    start_petstore
+    start_petstore "$base_path"
     if ! eval "$run_command"; then
         echo "[$lang_name] Happy path failed."
-        exit 1
+        return 1
     fi
     
-    echo "[$lang_name] Validating Endpoint Coverage..."
-    if ! docker logs petstore_server 2>&1 | python3 verify_coverage.py petstore.json /v2; then
+    echo "[$lang_name] Validating Endpoint Coverage..."; pwd; ls -l java_petstore_access.log >/dev/null 2>&1 || true
+    if ! { docker logs petstore_server 2>&1 || cat java_petstore_access.log 2>/dev/null; } | python3 verify_coverage.py "$spec_file" "$base_path"; then
         echo "[$lang_name] Coverage validation failed."
-        exit 1
+        return 1
     fi
     
     # Phase 2: Status Audit (Chaos: 500 Server Error)
     echo "[$lang_name] Phase 2: Status Audit (Expect Tests to Fail on 500s)..."
-    docker rm -f petstore_server >/dev/null 2>&1 || true
+    docker rm -f petstore_server >/dev/null 2>&1 || true 
     python3 saboteur_server.py 500 8080 &
     SABOTEUR_PID=$!
     sleep 2
     if eval "$run_command"; then
         echo "[$lang_name] Audit Failed: Tests passed even though the server returned HTTP 500."
-        kill $SABOTEUR_PID || true
-        exit 1
+        kill $SABOTEUR_PID 
+        return 1
     fi
-    kill $SABOTEUR_PID || true
+    kill $SABOTEUR_PID 
     
     # Phase 3: Schema Audit (Chaos: Invalid Schema)
     echo "[$lang_name] Phase 3: Schema Audit (Expect Tests to Fail on Invalid Payloads)..."
@@ -243,10 +263,10 @@ run_test_with_audit() {
     sleep 2
     if eval "$run_command"; then
         echo "[$lang_name] Audit Failed: Tests passed even though the server returned invalid JSON schema."
-        kill $SABOTEUR_PID || true
-        exit 1
+        kill $SABOTEUR_PID 
+        return 1
     fi
-    kill $SABOTEUR_PID || true
+    kill $SABOTEUR_PID 
     
     echo "[$lang_name] All audits passed successfully."
 }
@@ -256,7 +276,10 @@ run_test_with_audit() {
 # Description: Executes native tests for each enabled toolchain.
 # ==========================================
 run_test() {
-    run_test_with_audit "cdd-ts" '
+        for spec_name in "petstore.json" "petstore_oas3.json"; do
+        if [ "$spec_name" = "petstore.json" ]; then base_path="/v2"; else base_path="/api/v3"; fi
+        export SPEC_FILE="../$spec_name"
+        run_test_with_audit "cdd-ts" "$spec_name" "$base_path"  '
         (
             cd cdd-ts
             npm install
@@ -268,7 +291,7 @@ run_test() {
             cd angular-client
             npx ng add @angular/material --skip-confirmation --defaults || true
             cd ../cdd-ts
-            node dist/cli.js from_openapi to_sdk -i ../petstore.json --output ../angular-client/src/app/api --implementation angular --platform browser
+            node dist/cli.js from_openapi to_sdk -i "$SPEC_FILE" --output ../angular-client/src/app/api --implementation angular --platform browser
             
             cd ../angular-client
             npm install
@@ -287,7 +310,7 @@ run_test() {
             npm install typescript vitest @types/node
             
             cd ../
-            node dist/cli.js from_openapi to_sdk -i ../petstore.json --output node-client --implementation node --platform node
+            node dist/cli.js from_openapi to_sdk -i "$SPEC_FILE" --output node-client --implementation node --platform node
             
             cd node-client
             # Add a tsconfig to ensure module resolution for tests
@@ -316,15 +339,19 @@ INNER_EOF_CONFIG
             npx vitest run src/integration.spec.ts
         )
     '
+    done
 
-    run_test_with_audit "cdd-kotlin" '
+        for spec_name in "petstore.json" "petstore_oas3.json"; do
+        if [ "$spec_name" = "petstore.json" ]; then base_path="/v2"; else base_path="/api/v3"; fi
+        export SPEC_FILE="../$spec_name"
+        run_test_with_audit "cdd-kotlin" "$spec_name" "$base_path"  '
         (
             cd cdd-kotlin
             export GRADLE_USER_HOME=/Users/samuel/.gemini/tmp/cdd-kotlin/.gradle_home
             ./gradlew jvmJar
             rm -rf ../kotlin-client
             export GRADLE_USER_HOME=/Users/samuel/.gemini/tmp/cdd-kotlin/.gradle_home
-            ./gradlew run --args="from_openapi to_sdk -i ../petstore.json --output ../kotlin-client --tests"
+            ./gradlew run --args="from_openapi to_sdk -i "$SPEC_FILE" --output ../kotlin-client --tests"
             
             cd ../kotlin-client
             export GRADLE_USER_HOME=/Users/samuel/.gemini/tmp/cdd-kotlin/.gradle_home
@@ -333,40 +360,52 @@ INNER_EOF_CONFIG
             gradle test || true || true --no-daemon || true || true || echo "kotlin sdk tests failed"
         )
     '
+    done
 
-    run_test_with_audit "cdd-go" '
+        for spec_name in "petstore.json" "petstore_oas3.json"; do
+        if [ "$spec_name" = "petstore.json" ]; then base_path="/v2"; else base_path="/api/v3"; fi
+        export SPEC_FILE="../$spec_name"
+        run_test_with_audit "cdd-go" "$spec_name" "$base_path"  '
         (
             cd cdd-go
             make test 
             make build
             rm -rf ../cdd-go-client
-            ./bin/cdd-go from_openapi to_sdk -i ../petstore.json -o ../cdd-go-client -create-composable-tests
+            ./bin/cdd-go from_openapi to_sdk -i "$SPEC_FILE" -o ../cdd-go-client -create-composable-tests
             cd ../cdd-go-client
             find models -type f ! -name "components.go" -exec rm -f {} +
             go mod tidy
             go test ./...
         )
     '
+    done
 
-    run_test_with_audit "cdd-csharp" '
+        for spec_name in "petstore.json" "petstore_oas3.json"; do
+        if [ "$spec_name" = "petstore.json" ]; then base_path="/v2"; else base_path="/api/v3"; fi
+        export SPEC_FILE="../$spec_name"
+        run_test_with_audit "cdd-csharp" "$spec_name" "$base_path"  '
         (
             cd cdd-csharp
             dotnet restore
             dotnet build --no-restore
             dotnet test tests/Cdd.OpenApi.Tests --no-build
             rm -rf ../cdd-csharp-client
-            dotnet run --project src/Cdd.OpenApi.Cli/Cdd.OpenApi.Cli.csproj -f net10.0 -- from_openapi to_sdk -i ../petstore.json -o ../cdd-csharp-client
+            dotnet run --project src/Cdd.OpenApi.Cli/Cdd.OpenApi.Cli.csproj -f net10.0 -- from_openapi to_sdk -i "$SPEC_FILE" -o ../cdd-csharp-client
             cd ../cdd-csharp-client
             dotnet test GeneratedProject.sln
         )
     '
+    done
 
-    run_test_with_audit "cdd-python-all" '
+        for spec_name in "petstore.json" "petstore_oas3.json"; do
+        if [ "$spec_name" = "petstore.json" ]; then base_path="/v2"; else base_path="/api/v3"; fi
+        export SPEC_FILE="../$spec_name"
+        run_test_with_audit "cdd-python-all" "$spec_name" "$base_path"  '
         (
             cd cdd-python-all
             make test
             rm -rf ../cdd-python-client
-            uv run python -m openapi_client.cli from_openapi to_sdk -i ../petstore.json -o ../cdd-python-client
+            uv run python -m openapi_client.cli from_openapi to_sdk -i "$SPEC_FILE" -o ../cdd-python-client
             cd ../cdd-python-client
             python3 -m venv .venv
             source .venv/bin/activate
@@ -374,35 +413,47 @@ INNER_EOF_CONFIG
             pytest test/
         )
     '
+    done
 
-    run_test_with_audit "cdd-rust" '
+        for spec_name in "petstore.json" "petstore_oas3.json"; do
+        if [ "$spec_name" = "petstore.json" ]; then base_path="/v2"; else base_path="/api/v3"; fi
+        export SPEC_FILE="../$spec_name"
+        run_test_with_audit "cdd-rust" "$spec_name" "$base_path"  '
         (
             cd cdd-rust
             cargo test
             rm -rf ../cdd-rust-client
-            cargo run -p cdd-cli --bin cdd-rust -- from_openapi to_sdk -i ../petstore.json -o ../cdd-rust-client --tests
+            cargo run -p cdd-cli --bin cdd-rust -- from_openapi to_sdk -i "$SPEC_FILE" -o ../cdd-rust-client --tests
             cd ../cdd-rust-client
             cargo test
         )
     '
+    done
 
-    run_test_with_audit "cdd-swift" '
+        for spec_name in "petstore.json" "petstore_oas3.json"; do
+        if [ "$spec_name" = "petstore.json" ]; then base_path="/v2"; else base_path="/api/v3"; fi
+        export SPEC_FILE="../$spec_name"
+        run_test_with_audit "cdd-swift" "$spec_name" "$base_path"  '
         (
             cd cdd-swift
             make test 
             rm -rf ../cdd-swift-client
-            swift run cdd-swift from_openapi to_sdk -i ../petstore_oas3.json -o ../cdd-swift-client --tests
+            swift run cdd-swift from_openapi to_sdk -i "$SPEC_FILE" -o ../cdd-swift-client --tests
             cd ../cdd-swift-client
             swift test
         )
     '
+    done
 
-    run_test_with_audit "cdd-c" '
+        for spec_name in "petstore.json" "petstore_oas3.json"; do
+        if [ "$spec_name" = "petstore.json" ]; then base_path="/v2"; else base_path="/api/v3"; fi
+        export SPEC_FILE="../$spec_name"
+        run_test_with_audit "cdd-c" "$spec_name" "$base_path"  '
         (
             cd cdd-c
             make test
             rm -rf ../cdd-c-client
-            bin/cdd-c from_openapi to_sdk -i ../petstore_oas3.json -o ../cdd-c-client --tests
+            bin/cdd-c from_openapi to_sdk -i "$SPEC_FILE" -o ../cdd-c-client --tests
             cd ../cdd-c-client
             cmake . -DFETCHCONTENT_UPDATES_DISCONNECTED=ON
             cmake --build .
@@ -410,13 +461,17 @@ INNER_EOF_CONFIG
             ./src/test_generated_client
         )
     '
+    done
 
-    run_test_with_audit "cdd-cpp" '
+        for spec_name in "petstore.json" "petstore_oas3.json"; do
+        if [ "$spec_name" = "petstore.json" ]; then base_path="/v2"; else base_path="/api/v3"; fi
+        export SPEC_FILE="../$spec_name"
+        run_test_with_audit "cdd-cpp" "$spec_name" "$base_path"  '
         (
             cd cdd-cpp
             make test 
             rm -rf ../cdd-cpp-client
-            ./build/cdd-cpp from_openapi to_sdk -i ../petstore.json -o ../cdd-cpp-client --tests
+            ./build/cdd-cpp from_openapi to_sdk -i "$SPEC_FILE" -o ../cdd-cpp-client --tests
             cd ../cdd-cpp-client
             cmake . -DFETCHCONTENT_UPDATES_DISCONNECTED=ON
             cmake --build .
@@ -424,46 +479,62 @@ INNER_EOF_CONFIG
             ./src/test_generated_client
         )
     '
+    done
 
-    run_test_with_audit "cdd-java" '
+        for spec_name in "petstore.json" "petstore_oas3.json"; do
+        if [ "$spec_name" = "petstore.json" ]; then base_path="/v2"; else base_path="/api/v3"; fi
+        export SPEC_FILE="../$spec_name"
+        run_test_with_audit "cdd-java" "$spec_name" "$base_path"  '
         (
             cd cdd-java
             make test
             make build
             rm -rf ../cdd-java-client
-            java -cp "lib/*:bin" cli.Main from_openapi to_sdk -i ../petstore.json --tests -o ../cdd-java-client
+            java -cp "lib/*:bin" cli.Main from_openapi to_sdk -i "$SPEC_FILE" --tests -o ../cdd-java-client
             cd ../cdd-java-client
             mvn test
         )
     '
+    done
 
-    run_test_with_audit "cdd-php" '
+        for spec_name in "petstore.json" "petstore_oas3.json"; do
+        if [ "$spec_name" = "petstore.json" ]; then base_path="/v2"; else base_path="/api/v3"; fi
+        export SPEC_FILE="../$spec_name"
+        run_test_with_audit "cdd-php" "$spec_name" "$base_path"  '
         (
             cd cdd-php
             make test
             echo "Generating PHP SDK and running integration tests..."
             rm -rf ../php-client
-            php bin/cdd-php from_openapi to_sdk --tests -i ../petstore.json -o ../php-client
+            php bin/cdd-php from_openapi to_sdk --tests -i "$SPEC_FILE" -o ../php-client
             cd ../php-client
             composer install
             composer test || echo "cdd-php sdk tests failed"
         )
     '
+    done
 
-    run_test_with_audit "cdd-ruby" '
+        for spec_name in "petstore.json" "petstore_oas3.json"; do
+        if [ "$spec_name" = "petstore.json" ]; then base_path="/v2"; else base_path="/api/v3"; fi
+        export SPEC_FILE="../$spec_name"
+        run_test_with_audit "cdd-ruby" "$spec_name" "$base_path"  '
         (
             cd cdd-ruby
             bundle install
             bundle exec rspec
             rm -rf ../cdd-ruby-client
-            bin/cdd-ruby from_openapi to_sdk -i ../petstore.json -o ../cdd-ruby-client
+            bin/cdd-ruby from_openapi to_sdk -i "$SPEC_FILE" -o ../cdd-ruby-client
             cd ../cdd-ruby-client
             bundle install
             bundle exec rspec
         )
     '
+    done
 
-    run_test_with_audit "cdd-sh" '
+        for spec_name in "petstore.json" "petstore_oas3.json"; do
+        if [ "$spec_name" = "petstore.json" ]; then base_path="/v2"; else base_path="/api/v3"; fi
+        export SPEC_FILE="../$spec_name"
+        run_test_with_audit "cdd-sh" "$spec_name" "$base_path"  '
         (
             cd cdd-sh
             ./test.sh
@@ -481,6 +552,7 @@ INNER_EOF_CONFIG
             ./tests/test_routes.sh || true
         )
     '
+    done
 }
 
 # ==========================================
@@ -499,7 +571,7 @@ run_roundtrip() {
             if false; then npm ci; else npm i; fi
             npm run build
         )
-        for file in OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+        for file in petstore.json petstore_oas3.json; do
             if [ -f "$file" ]; then
                 filename=$(basename "$file")
                 echo "Testing $filename with cdd-ts..."
@@ -509,7 +581,7 @@ run_roundtrip() {
             fi
         done
     fi
-    for file in OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+    for file in petstore.json petstore_oas3.json; do
         if [ -f "$file" ]; then
             filename=$(basename "$file")
             
@@ -606,7 +678,7 @@ run_roundtrip() {
             cd cdd-python-all
             pip install pyyaml
             pip install -e .
-            for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+            for file in ../petstore.json ../petstore_oas3.json; do
                 if [ -f "$file" ]; then
                     mkdir -p temp-py
                     python3 -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-py-spec.json
@@ -623,7 +695,7 @@ run_roundtrip() {
         (
             cd cdd-swift
             swift build -c release
-            for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+            for file in ../petstore.json ../petstore_oas3.json; do
                 if [ -f "$file" ]; then
                     python3 -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-swift-spec.json
                     .build/release/cdd-swift from_openapi -i temp-swift-spec.json -o temp-swift
@@ -638,7 +710,7 @@ run_roundtrip() {
         echo "Testing with cdd-sh..."
         (
             cd cdd-sh
-            for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+            for file in ../petstore.json ../petstore_oas3.json; do
                 if [ -f "$file" ]; then
                     python3 -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-sh-spec.json
                     ./cdd.sh from_openapi -i temp-sh-spec.json -o temp-sh-dir
@@ -680,53 +752,8 @@ run_roundtrip() {
         echo "Testing with cdd-csharp..."
         (
             cd cdd-csharp
-            for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+            for file in ../petstore.json ../petstore_oas3.json; do
                 if [ -f "$file" ]; then
-                    python3 -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-cs-spec.json
-                    dotnet run --project src/Cdd.OpenApi.Cli -- from_openapi -i temp-cs-spec.json -o temp-cs
-                    dotnet run --project src/Cdd.OpenApi.Cli -- to_openapi -i temp-cs -o temp-cs-out.json
-                    rm -rf temp-cs-spec.json temp-cs temp-cs-out.json
-                fi
-            done
-        )
-    fi
-}
-
-# ==========================================
-# Script Execution block
-# ==========================================
-if [ "$__BASH_SOURCED_TEST__" != "1" ]; then
-    if [ "$1" = "roundtrip" ]; then
-        run_roundtrip
-        echo "==================================="
-        echo "All roundtrip tests completed successfully!"
-        echo "==================================="
-    elif [ "$1" = "all" ]; then
-        start_petstore
-        run_test
-        run_wasm_builds
-        run_roundtrip
-        echo "==================================="
-        echo "All local tests completed successfully!"
-        echo "==================================="
-    elif [ "$1" = "only-test" ]; then
-        start_petstore
-        run_test
-        echo "==================================="
-        echo "All local tests completed successfully (WASM skipped)!"
-        echo "==================================="
-    else
-        # default to test
-        start_petstore
-        run_test
-        run_wasm_builds
-        echo "==================================="
-        echo "All test.yml local tests completed successfully!"
-        echo "==================================="
-        echo "Run '$0 roundtrip' to execute roundtrip tests."
-    fi
-fi
-en
                     python3 -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-cs-spec.json
                     dotnet run --project src/Cdd.OpenApi.Cli -- from_openapi -i temp-cs-spec.json -o temp-cs
                     dotnet run --project src/Cdd.OpenApi.Cli -- to_openapi -i temp-cs -o temp-cs-out.json

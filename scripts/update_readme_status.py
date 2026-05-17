@@ -1,10 +1,29 @@
 #!/usr/bin/env python3
+"""
+update_readme_status.py
+
+This script automates the process of updating the 'Current Ecosystem Status' table
+in the README.md file. It runs the local tests (via `local-test.sh`) for each
+CDD toolchain to determine if the local tests and roundtrip tests pass or fail,
+and dynamically updates the markdown table with the live results.
+"""
+
 import os
 import re
 import subprocess
 import sys
 
-def run_test(toolchain, test_type):
+def run_test(toolchain: str, test_type: str) -> bool:
+    """
+    Executes the local test script for a specific toolchain and test type.
+
+    Args:
+        toolchain (str): The name of the CDD toolchain directory (e.g., 'cdd-java').
+        test_type (str): The type of test to run ('only-test' or 'roundtrip').
+
+    Returns:
+        bool: True if the test execution completes successfully (exit code 0), False otherwise.
+    """
     print(f"Running {test_type} for {toolchain}...")
     env = os.environ.copy()
     env["ONLY_TEST"] = toolchain
@@ -28,7 +47,12 @@ def run_test(toolchain, test_type):
         print(f"Error running {toolchain} {test_type}: {e}")
         return False
 
-def main():
+def main() -> None:
+    """
+    Main entry point. Parses README.md, locates the ecosystem status table,
+    runs validation tests for each identified toolchain, and overwrites README.md
+    if the statuses have changed.
+    """
     readme_path = "README.md"
     if not os.path.exists(readme_path):
         print("README.md not found.")
