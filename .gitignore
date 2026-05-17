@@ -53,3 +53,30 @@ docker
 mock_nginx.py
 
 
+
+# Patch and fix scripts
+patch_*.py
+fix_*.py
+*.patch
+update_subs.sh
+update_subs_md.sh
+
+# Temporary testing artifacts
+dummy*
+test-out.txt
+test.png
+file.bin
+null
+hosts
+
+# Backups
+*.bak
+
+# NPM (local installs for testing)
+package.json
+package-lock.json
+
+# Generated/downloaded test directories
+*-client*/
+compliance-swagger-*/
+swagger-petstore-*/

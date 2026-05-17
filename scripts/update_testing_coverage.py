@@ -28,7 +28,7 @@ def main() -> None:
 
     start_idx = -1
     for i, line in enumerate(lines):
-        if "| Repository | Native Build/Tests | WASM Build/Tests | Reason if Skipped |" in line:
+        if "| Repository | Native Build/Tests | WASM Build/Tests |" in line:
             start_idx = i
             break
 
@@ -45,32 +45,31 @@ def main() -> None:
             break
 
         parts = [p.strip() for p in line.split("|")]
-        if len(parts) >= 5:
+        if len(parts) >= 4:
             repo_name = parts[1].strip("` ")
             if repo_name.startswith("cdd-"):
                 wasm_md_path = os.path.join(repo_name, "WASM.md")
                 has_wasm = False
-                reason = ""
                 
                 if os.path.exists(wasm_md_path):
                     with open(wasm_md_path, "r", encoding="utf-8") as wf:
                         content = wf.read().lower()
                         # Simple heuristics to determine WASM support based on the markdown contents
                         if "unsupported" in content and "possible" not in content and "yes" not in content:
-                            reason = "Unsupported as per WASM.md"
+                            has_wasm = False
                         elif "out of scope" in content:
-                            reason = "Out of scope as per WASM.md"
+                            has_wasm = False
                         elif "missing" in content and "wasm support" in content:
-                            reason = "Missing WASM support / WASM.md"
+                            has_wasm = False
                         else:
                             has_wasm = True
                 else:
-                    reason = "Missing WASM support / WASM.md"
+                    has_wasm = False
 
                 wasm_status = "✅ Yes" if has_wasm else "❌ No"
                 
                 # Align columns
-                new_line = f"| `{repo_name}` | ✅ Yes | {wasm_status} | {reason} |\n"
+                new_line = f"| `{repo_name}` | ✅ Yes | {wasm_status} |\n"
                 
                 if lines[i] != new_line:
                     updated_lines[i] = new_line

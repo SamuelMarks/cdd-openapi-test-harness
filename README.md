@@ -6,7 +6,7 @@ cdd-openapi-test-harness
 
 This repository orchestrates end-to-end integration and roundtrip tests for code generators built with Compiler Driven Development (CDD). 
 
-It validates that toolchains built for multiple target languages (e.g., Angular, Kotlin, Rust, Python, Swift) can correctly parse OpenAPI 3.0/3.2.0 specifications, generate idiomatic code (SDKs, handlers, models), and crucially, extract the exact same OpenAPI document back out of the generated code (AST).
+It validates that toolchains built for 13+ target languages (C; C++; C#; Go; Java; Kotlin; PHP; Python; Ruby; Rust; /bin/sh; Swift; TypeScript) can correctly parse Swagger 2.0 and OpenAPI 3.2.0 specifications, generate idiomatic code (SDKs, handlers, models), and crucially, extract the exact same OpenAPI 3.2.0 document back out of the generated code (AST).
 
 ## Architecture
 
@@ -14,21 +14,21 @@ This project ties together independent Git repositories (submodules) containing 
 
 ### Submodules
 
-| Repository | Language | Client or Server | Extra features | OpenAPI Standard | CI Status |
+| Repository | Language | Client or Server | Extra features | Standards | CI Status |
 |---|---|---|---|---|---|
-| [`cdd-c`](https://github.com/SamuelMarks/cdd-c) | C (C89) | Client | FFI | Swagger 2.0 and OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-c/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-c/actions/workflows/ci.yml) |
-| [`cdd-cpp`](https://github.com/SamuelMarks/cdd-cpp) | C++ | Client | Upgrades Swagger & Google Discovery to Swagger 2.0 and OpenAPI 3.2.0 | Swagger 2.0 until Swagger 2.0 and OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-cpp/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-cpp/actions/workflows/ci.yml) |
-| [`cdd-csharp`](https://github.com/SamuelMarks/cdd-csharp) | C# | Client | CLR | Swagger 2.0 and OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-csharp/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-csharp/actions/workflows/ci.yml) |
-| [`cdd-go`](https://github.com/SamuelMarks/cdd-go) | Go | Client |  | Swagger 2.0 and OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-go/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-go/actions/workflows/ci.yml) |
-| [`cdd-java`](https://github.com/SamuelMarks/cdd-java) | Java | Client | | Swagger 2.0 and OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-java/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-java/actions/workflows/ci.yml) |
-| [`cdd-kotlin`](https://github.com/offscale/cdd-kotlin) | Kotlin (Multiplatform) | Client | Auto-Admin UI | Swagger 2.0 and OpenAPI 3.2.0 | [![CI](https://github.com/offscale/cdd-kotlin/actions/workflows/ci.yml/badge.svg)](https://github.com/offscale/cdd-kotlin/actions/workflows/ci.yml) |
-| [`cdd-php`](https://github.com/SamuelMarks/cdd-php) | PHP | Client |  | Swagger 2.0 and OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-php/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-php/actions/workflows/ci.yml) |
-| [`cdd-python-all`](https://github.com/offscale/cdd-python-all) | Python | Client |  | Swagger 2.0 and OpenAPI 3.2.0 | [![CI](https://github.com/offscale/cdd-python-all/actions/workflows/ci.yml/badge.svg)](https://github.com/offscale/cdd-python-all/actions/workflows/ci.yml) |
-| [`cdd-ruby`](https://github.com/SamuelMarks/cdd-ruby) | Ruby | Client |  | Swagger 2.0 and OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-ruby/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-ruby/actions/workflows/ci.yml) |
-| [`cdd-rust`](https://github.com/SamuelMarks/cdd-rust) | Rust | Client & Server | CLI frontend for SDK | Swagger 2.0 and OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-rust/actions/workflows/ci-cargo.yml/badge.svg)](https://github.com/SamuelMarks/cdd-rust/actions/workflows/ci-cargo.yml) |
-| [`cdd-sh`](https://github.com/SamuelMarks/cdd-sh) | Shell (/bin/sh) | Client |  | Swagger 2.0 and OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-sh/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-sh/actions/workflows/ci.yml) |
-| [`cdd-swift`](https://github.com/SamuelMarks/cdd-swift) | Swift | Client |  | Swagger 2.0 and OpenAPI 3.2.0 | [![Swift](https://github.com/SamuelMarks/cdd-swift/actions/workflows/swift.yml/badge.svg)](https://github.com/SamuelMarks/cdd-swift/actions/workflows/swift.yml) |
-| [`cdd-ts`](https://github.com/offscale/cdd-ts) | TypeScript | Client | Auto-Admin UI; Angular; fetch; Axios; Node.js | Swagger 2.0 and OpenAPI 3.2.0 & Swagger 2 | [![Tests and coverage](https://github.com/offscale/cdd-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/offscale/cdd-ts/actions/workflows/ci.yml) |
+| [`cdd-c`](https://github.com/SamuelMarks/cdd-c) | C (C89) | Client | FFI | Swagger 2.0; OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-c/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-c/actions/workflows/ci.yml) |
+| [`cdd-cpp`](https://github.com/SamuelMarks/cdd-cpp) | C++ | Client | Upgrades Swagger & Google Discovery to OpenAPI 3.2.0 | Swagger 2.0; OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-cpp/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-cpp/actions/workflows/ci.yml) |
+| [`cdd-csharp`](https://github.com/SamuelMarks/cdd-csharp) | C# | Client | CLR | Swagger 2.0; OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-csharp/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-csharp/actions/workflows/ci.yml) |
+| [`cdd-go`](https://github.com/SamuelMarks/cdd-go) | Go | Client |  | Swagger 2.0; OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-go/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-go/actions/workflows/ci.yml) |
+| [`cdd-java`](https://github.com/SamuelMarks/cdd-java) | Java | Client | | Swagger 2.0; OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-java/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-java/actions/workflows/ci.yml) |
+| [`cdd-kotlin`](https://github.com/offscale/cdd-kotlin) | Kotlin (Multiplatform) | Client | Auto-Admin UI | Swagger 2.0; OpenAPI 3.2.0 | [![CI](https://github.com/offscale/cdd-kotlin/actions/workflows/ci.yml/badge.svg)](https://github.com/offscale/cdd-kotlin/actions/workflows/ci.yml) |
+| [`cdd-php`](https://github.com/SamuelMarks/cdd-php) | PHP | Client |  | Swagger 2.0; OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-php/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-php/actions/workflows/ci.yml) |
+| [`cdd-python-all`](https://github.com/offscale/cdd-python-all) | Python | Client |  | Swagger 2.0; OpenAPI 3.2.0 | [![CI](https://github.com/offscale/cdd-python-all/actions/workflows/ci.yml/badge.svg)](https://github.com/offscale/cdd-python-all/actions/workflows/ci.yml) |
+| [`cdd-ruby`](https://github.com/SamuelMarks/cdd-ruby) | Ruby | Client |  | Swagger 2.0; OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-ruby/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-ruby/actions/workflows/ci.yml) |
+| [`cdd-rust`](https://github.com/SamuelMarks/cdd-rust) | Rust | Client & Server | CLI frontend for SDK | Swagger 2.0; OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-rust/actions/workflows/ci-cargo.yml/badge.svg)](https://github.com/SamuelMarks/cdd-rust/actions/workflows/ci-cargo.yml) |
+| [`cdd-sh`](https://github.com/SamuelMarks/cdd-sh) | Shell (/bin/sh) | Client |  | Swagger 2.0; OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-sh/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-sh/actions/workflows/ci.yml) |
+| [`cdd-swift`](https://github.com/SamuelMarks/cdd-swift) | Swift | Client |  | Swagger 2.0; OpenAPI 3.2.0 | [![Swift](https://github.com/SamuelMarks/cdd-swift/actions/workflows/swift.yml/badge.svg)](https://github.com/SamuelMarks/cdd-swift/actions/workflows/swift.yml) |
+| [`cdd-ts`](https://github.com/offscale/cdd-ts) | TypeScript | Client | Auto-Admin UI; Angular; fetch; Axios; Node.js | Swagger 2.0; OpenAPI 3.2.0 | [![Tests and coverage](https://github.com/offscale/cdd-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/offscale/cdd-ts/actions/workflows/ci.yml) |
 
 - **OAI-OpenAPI-Specification**: The official OpenAPI repository used for sourcing raw, versioned test YAML files (`api-with-examples.yaml`, `callback-example.yaml`, `petstore.yaml`, etc.).
 
@@ -71,21 +71,21 @@ To track granular Swagger 2.0 and OpenAPI 3.2.0 feature implementations (like `$
 
 This repository tests both the native builds and WebAssembly (WASM) targets (if supported by the implementation's `WASM.md`).
 
-| Repository | Native Build/Tests | WASM Build/Tests | Reason if Skipped |
-|---|---|---|---|
-| `cdd-c` | ✅ Yes | ✅ Yes |  |
-| `cdd-cpp` | ✅ Yes | ✅ Yes |  |
-| `cdd-csharp` | ✅ Yes | ✅ Yes |  |
-| `cdd-go` | ✅ Yes | ✅ Yes |  |
-| `cdd-java` | ✅ Yes | ✅ Yes |  |
-| `cdd-kotlin` | ✅ Yes | ✅ Yes |  |
-| `cdd-php` | ✅ Yes | ✅ Yes |  |
-| `cdd-python-all` | ✅ Yes | ✅ Yes |  |
-| `cdd-ruby` | ✅ Yes | ✅ Yes |  |
-| `cdd-rust` | ✅ Yes | ✅ Yes |  |
-| `cdd-sh` | ✅ Yes | ✅ Yes |  |
-| `cdd-swift` | ✅ Yes | ✅ Yes |  |
-| `cdd-ts` | ✅ Yes | ✅ Yes |  |
+| Repository | Native Build/Tests | WASM Build/Tests |
+|---|---|---|
+| `cdd-c` | ✅ Yes | ✅ Yes |
+| `cdd-cpp` | ✅ Yes | ✅ Yes |
+| `cdd-csharp` | ✅ Yes | ✅ Yes |
+| `cdd-go` | ✅ Yes | ✅ Yes |
+| `cdd-java` | ✅ Yes | ✅ Yes |
+| `cdd-kotlin` | ✅ Yes | ✅ Yes |
+| `cdd-php` | ✅ Yes | ✅ Yes |
+| `cdd-python-all` | ✅ Yes | ✅ Yes |
+| `cdd-ruby` | ✅ Yes | ✅ Yes |
+| `cdd-rust` | ✅ Yes | ✅ Yes |
+| `cdd-sh` | ✅ Yes | ✅ Yes |
+| `cdd-swift` | ✅ Yes | ✅ Yes |
+| `cdd-ts` | ✅ Yes | ✅ Yes |
 
 ## Setup & CI
 
