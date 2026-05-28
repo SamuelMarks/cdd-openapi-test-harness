@@ -16,7 +16,7 @@ The core set of subcommands is universally supported across all generators. Lang
 - [x] Ensure `serve_json_rpc` is present.
 
 ## 2. Command and Subcommand CLI arguments (Flags)
-**Status:** ⚠️ **Mostly Consistent**
+**Status:** ✅ **Mostly Consistent**
 
 The core flags (long and short variants) are functionally implemented across all tools. However, there are minor behavioral differences in how parsers handle single-dash vs. double-dash flags.
 
@@ -28,7 +28,7 @@ The core flags (long and short variants) are functionally implemented across all
 - [x] `--no-installable-package` (Disable package/build scaffolding)
 - [x] `--tests` (Enable integration tests/mocks)
 - [x] `--no-imports` and `--no-wrapping` (Specific to `to_docs_json`)
-- [ ] **Go CLI Fix:** Remove custom logic in `cdd-go/cmd/cdd-go/main.go` that intercepts and fails single-dash long flags (`-flag`), allowing the native Go `flag` package to handle them gracefully as standard.
+- [x] **Go CLI Fix:** Remove custom logic in `cdd-go/cmd/cdd-go/main.go` that intercepts and fails single-dash long flags (`-flag`), allowing the native Go `flag` package to handle them gracefully as standard.
 
 ## 3. Command and Subcommand CLI Docstrings
 **Status:** ✅ **Consistent**
@@ -42,7 +42,7 @@ While the exact presentation depends on the native argument parsing library (e.g
 - [x] `serve_json_rpc`: "Expose CLI interface as a JSON-RPC server."
 
 ## 4. JSON-RPC SDK Naming and Parameter Structure (The Interface)
-**Status:** ❌ **Highly Inconsistent**
+**Status:** ⚠️ **Partially Inconsistent**
 
 The `serve_json_rpc` endpoints are severely fragmented. They lack a unified schema for method names, parameter objects, and response structures. Additionally, several lower-level languages provide incomplete or stubbed JSON-RPC implementations.
 
@@ -50,37 +50,35 @@ The `serve_json_rpc` endpoints are severely fragmented. They lack a unified sche
 There is a fundamental disagreement on how nested CLI commands (`from_openapi to_sdk`) should map to JSON-RPC methods.
 
 **Current State:**
-- **Flattened (TS, Ruby):** Uses `from_openapi_to_sdk`, `from_openapi_to_server`.
-- **Nested (Go, Python):** Uses `from_openapi` as the method, passing `"subcommand": "to_sdk"` inside the `params` object.
+- **Flattened (TS, Ruby, Go, Python):** Uses `from_openapi_to_sdk`, `from_openapi_to_server`.
 
 **Action Items:**
-- [ ] Define a standard schema (recommendation: Flattened method names `from_openapi_to_sdk` to match standard JSON-RPC design patterns).
-- [ ] Refactor `cdd-go` to support flattened RPC method names.
-- [ ] Refactor `cdd-python-all` to support flattened RPC method names.
+- [x] Define a standard schema (recommendation: Flattened method names `from_openapi_to_sdk` to match standard JSON-RPC design patterns).
+- [x] Refactor `cdd-go` to support flattened RPC method names.
+- [x] Refactor `cdd-python-all` to support flattened RPC method names.
 
 ### 4B. JSON-RPC Parameter Structures (`params` field)
 The keys used inside the `params` payload vary drastically, making it impossible to use a single client to communicate with all language servers.
 
 **Current State (`to_openapi`):**
 - **TS:** `{ "input": "..." }`
-- **Python:** `{ "file": "..." }`
-- **Ruby:** `{ "f": "..." }` or `{ "filepath": "..." }`
-- **Go:** Expects a raw string array mapped to CLI arguments: `["-i", "foo.go"]`
+- **Python:** `{ "input": "..." }`
+- **Ruby:** `{ "input": "..." }`
+- **Go:** `{ "input": "..." }`
 
 **Action Items:**
-- [ ] Standardize `to_openapi` params to strictly require `{ "input": "...", "output": "..." }` across all languages.
-- [ ] Update `cdd-python-all` JSON-RPC handler (`to_openapi`).
-- [ ] Update `cdd-ruby` JSON-RPC handler (`to_openapi`).
-- [ ] Update `cdd-go` JSON-RPC handler to parse a JSON object for `to_openapi` rather than a string array.
+- [x] Standardize `to_openapi` params to strictly require `{ "input": "...", "output": "..." }` across all languages.
+- [x] Update `cdd-python-all` JSON-RPC handler (`to_openapi`).
+- [x] Update `cdd-ruby` JSON-RPC handler (`to_openapi`).
+- [x] Update `cdd-go` JSON-RPC handler to parse a JSON object for `to_openapi` rather than a string array.
 
 **Current State (`from_openapi_*`):**
-- **Go:** Accepts both a mapped JSON object and a raw string array.
-- **Python, TS, Ruby:** Accept mapped JSON objects, but internal keys vary slightly.
+- **Go, Python, TS, Ruby:** Accept mapped JSON objects.
 
 **Action Items:**
-- [ ] Standardize `from_openapi_*` params to strictly require `{ "input": "...", "input_dir": "...", "output": "...", "no_github_actions": bool, "no_installable_package": bool, "tests": bool }`.
-- [ ] Deprecate string array argument parsing in `cdd-go` JSON-RPC endpoints.
-- [ ] Ensure all boolean flags map correctly to JSON booleans (`true`/`false`), not strings.
+- [x] Standardize `from_openapi_*` params to strictly require `{ "input": "...", "input_dir": "...", "output": "...", "no_github_actions": bool, "no_installable_package": bool, "tests": bool }`.
+- [x] Deprecate string array argument parsing in `cdd-go` JSON-RPC endpoints.
+- [x] Ensure all boolean flags map correctly to JSON booleans (`true`/`false`), not strings.
 
 ### 4C. Stubbed and Incomplete Server Implementations
 The systems languages (C, C++, Rust) currently have broken or stubbed JSON-RPC server implementations.
