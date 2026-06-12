@@ -1,3 +1,4 @@
+fix_*
 # Project-specific ignores
 emsdk/
 *-client/
@@ -80,3 +81,88 @@ package-lock.json
 *-client*/
 compliance-swagger-*/
 swagger-petstore-*/
+
+# Careless 'git add .' wildcards
+# IDE / Editor
+*~
+*.swp
+*.swo
+*.swn
+*.bak
+*.orig
+*.rej
+
+# OS Generated
+.DS_Store?
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Environment and Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+
+# Temporary and Cache
+*.tmp
+*.temp
+tmp/
+temp/
+.cache/
+
+# Core dumps
+core.*
+vgcore.*
+
+# Archives
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.rar
+*.7z
+
+# Python
+*.egg-info/
+dist/
+.eggs/
+.tox/
+venv/
+.venv/
+env/
+.coverage
+htmlcov/
+
+# Java
+*.class
+*.jar
+*.war
+.gradle/
+
+# Ruby
+*.gem
+.bundle/
+
+# Node
+.npm/
+.yarn/
+
+# Swift
+.build/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# C/C++
+*.out
+
+# C#
+*.suo
+*.user
+
+# PHP
+vendor/
