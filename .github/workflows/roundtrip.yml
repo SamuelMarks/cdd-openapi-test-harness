@@ -97,16 +97,14 @@ jobs:
 
           should_run() {
             if [ -n "$ONLY_TEST" ]; then
-              if echo "$ONLY_TEST" | tr ',' '
-' | grep -q "^$1$"; then
+              if echo "$ONLY_TEST" | tr ',' '\n' | grep -q "^$1$"; then
                 return 0
               else
                 return 1
               fi
             fi
 
-            if [ -n "$IGNORE_TESTS" ] && echo "$IGNORE_TESTS" | tr ',' '
-' | grep -q "^$1$"; then
+            if [ -n "$IGNORE_TESTS" ] && echo "$IGNORE_TESTS" | tr ',' '\n' | grep -q "^$1$"; then
               echo "Skipping $1 (in IGNORE_TESTS)"
               return 1
             fi
@@ -129,8 +127,7 @@ jobs:
           }
 
           should_run() {
-            if echo "$IGNORE_TESTS" | tr ',' '
-' | grep -q "^$1$"; then
+            if echo "$IGNORE_TESTS" | tr ',' '\n' | grep -q "^$1$"; then
               echo "Skipping $1 (in IGNORE_TESTS)"
               return 1
             fi
@@ -146,7 +143,7 @@ jobs:
           }
           
           if should_run "cdd-ts"; then
-echo "==================================="
+          echo "==================================="
           echo "Running CDD Web NG Roundtrip Tests"
           echo "==================================="
           for file in OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
@@ -159,7 +156,7 @@ echo "==================================="
           fi
 
           if should_run "cdd-kotlin"; then
-echo "==================================="
+          echo "==================================="
           echo "Running CDD Kotlin Roundtrip Tests"
           echo "==================================="
           for file in OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
@@ -174,7 +171,7 @@ echo "==================================="
           fi
 
           if should_run "cdd-rust"; then
-echo "==================================="
+          echo "==================================="
           echo "Running CDD Rust Scaffold Tests"
           echo "==================================="
           for file in OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
@@ -233,16 +230,14 @@ echo "==================================="
 
           should_run() {
             if [ -n "$ONLY_TEST" ]; then
-              if echo "$ONLY_TEST" | tr ',' '
-' | grep -q "^$1$"; then
+              if echo "$ONLY_TEST" | tr ',' '\n' | grep -q "^$1$"; then
                 return 0
               else
                 return 1
               fi
             fi
 
-            if [ -n "$IGNORE_TESTS" ] && echo "$IGNORE_TESTS" | tr ',' '
-' | grep -q "^$1$"; then
+            if [ -n "$IGNORE_TESTS" ] && echo "$IGNORE_TESTS" | tr ',' '\n' | grep -q "^$1$"; then
               echo "Skipping $1 (in IGNORE_TESTS)"
               return 1
             fi
@@ -265,8 +260,7 @@ echo "==================================="
           }
 
           should_run() {
-            if echo "$IGNORE_TESTS" | tr ',' '
-' | grep -q "^$1$"; then
+            if echo "$IGNORE_TESTS" | tr ',' '\n' | grep -q "^$1$"; then
               echo "Skipping $1 (in IGNORE_TESTS)"
               return 1
             fi
@@ -370,16 +364,14 @@ echo "==================================="
 
           should_run() {
             if [ -n "$ONLY_TEST" ]; then
-              if echo "$ONLY_TEST" | tr ',' '
-' | grep -q "^$1$"; then
+              if echo "$ONLY_TEST" | tr ',' '\n' | grep -q "^$1$"; then
                 return 0
               else
                 return 1
               fi
             fi
 
-            if [ -n "$IGNORE_TESTS" ] && echo "$IGNORE_TESTS" | tr ',' '
-' | grep -q "^$1$"; then
+            if [ -n "$IGNORE_TESTS" ] && echo "$IGNORE_TESTS" | tr ',' '\n' | grep -q "^$1$"; then
               echo "Skipping $1 (in IGNORE_TESTS)"
               return 1
             fi
@@ -402,8 +394,7 @@ echo "==================================="
           }
 
           should_run() {
-            if echo "$IGNORE_TESTS" | tr ',' '
-' | grep -q "^$1$"; then
+            if echo "$IGNORE_TESTS" | tr ',' '\n' | grep -q "^$1$"; then
               echo "Skipping $1 (in IGNORE_TESTS)"
               return 1
             fi
@@ -471,16 +462,14 @@ echo "==================================="
 
           should_run() {
             if [ -n "$ONLY_TEST" ]; then
-              if echo "$ONLY_TEST" | tr ',' '
-' | grep -q "^$1$"; then
+              if echo "$ONLY_TEST" | tr ',' '\n' | grep -q "^$1$"; then
                 return 0
               else
                 return 1
               fi
             fi
 
-            if [ -n "$IGNORE_TESTS" ] && echo "$IGNORE_TESTS" | tr ',' '
-' | grep -q "^$1$"; then
+            if [ -n "$IGNORE_TESTS" ] && echo "$IGNORE_TESTS" | tr ',' '\n' | grep -q "^$1$"; then
               echo "Skipping $1 (in IGNORE_TESTS)"
               return 1
             fi
@@ -503,8 +492,7 @@ echo "==================================="
           }
 
           should_run() {
-            if echo "$IGNORE_TESTS" | tr ',' '
-' | grep -q "^$1$"; then
+            if echo "$IGNORE_TESTS" | tr ',' '\n' | grep -q "^$1$"; then
               echo "Skipping $1 (in IGNORE_TESTS)"
               return 1
             fi
