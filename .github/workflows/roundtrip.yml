@@ -16,7 +16,7 @@ jobs:
       ONLY_TEST: ""
     steps:
       - name: Checkout repo and submodules
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -25,7 +25,7 @@ jobs:
         with:
           node-version: 'lts/*'
           cache: 'npm'
-          cache-dependency-path: 'cdd-web-ng/package-lock.json'
+          cache-dependency-path: 'cdd-ts/package-lock.json'
 
       - name: Setup Java
         uses: actions/setup-java@v5
@@ -58,6 +58,8 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: '1.25.x'
+          cache-dependency-path: cdd-go/go.sum
+
           cache: true
 
       - name: Setup .NET
@@ -65,8 +67,8 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Install dependencies and build cdd-web-ng
-        working-directory: cdd-web-ng
+      - name: Install dependencies and build cdd-ts
+        working-directory: cdd-ts
         run: |
           if [ -f package-lock.json ]; then
             npm ci
@@ -81,7 +83,7 @@ jobs:
 
           is_client() {
             case "$1" in
-                cdd-c|cdd-cpp|cdd-csharp|cdd-go|cdd-java|cdd-kotlin|cdd-php|cdd-python-client|cdd-ruby|cdd-rust|cdd-sh|cdd-swift|cdd-web-ng) return 0 ;;
+                cdd-c|cdd-cpp|cdd-csharp|cdd-go|cdd-java|cdd-kotlin|cdd-php|cdd-python-client|cdd-ruby|cdd-rust|cdd-sh|cdd-swift|cdd-ts) return 0 ;;
                 *) return 1 ;;
             esac
           }
@@ -143,15 +145,15 @@ jobs:
             return 0
           }
           
-          if should_run "cdd-web-ng"; then
+          if should_run "cdd-ts"; then
 echo "==================================="
           echo "Running CDD Web NG Roundtrip Tests"
           echo "==================================="
           for file in OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
               filename=$(basename "$file")
-              echo "Testing $filename with cdd-web-ng..."
-              node cdd-web-ng/dist/cli.js from_openapi -i "$file" --output temp-ng
-              node cdd-web-ng/dist/cli.js to_openapi -f temp-ng --format yaml > temp-ng-spec.yaml
+              echo "Testing $filename with cdd-ts..."
+              node cdd-ts/dist/cli.js from_openapi -i "$file" --output temp-ng
+              node cdd-ts/dist/cli.js to_openapi -f temp-ng --format yaml > temp-ng-spec.yaml
               rm -rf temp-ng temp-ng-spec.yaml
           done
           fi
@@ -217,7 +219,7 @@ echo "==================================="
           set -e
           is_client() {
             case "$1" in
-                cdd-c|cdd-cpp|cdd-csharp|cdd-go|cdd-java|cdd-kotlin|cdd-php|cdd-python-client|cdd-ruby|cdd-rust|cdd-sh|cdd-swift|cdd-web-ng) return 0 ;;
+                cdd-c|cdd-cpp|cdd-csharp|cdd-go|cdd-java|cdd-kotlin|cdd-php|cdd-python-client|cdd-ruby|cdd-rust|cdd-sh|cdd-swift|cdd-ts) return 0 ;;
                 *) return 1 ;;
             esac
           }
@@ -354,7 +356,7 @@ echo "==================================="
           set -e
           is_client() {
             case "$1" in
-                cdd-c|cdd-cpp|cdd-csharp|cdd-go|cdd-java|cdd-kotlin|cdd-php|cdd-python-client|cdd-ruby|cdd-rust|cdd-sh|cdd-swift|cdd-web-ng) return 0 ;;
+                cdd-c|cdd-cpp|cdd-csharp|cdd-go|cdd-java|cdd-kotlin|cdd-php|cdd-python-client|cdd-ruby|cdd-rust|cdd-sh|cdd-swift|cdd-ts) return 0 ;;
                 *) return 1 ;;
             esac
           }
@@ -455,7 +457,7 @@ echo "==================================="
           set -e
           is_client() {
             case "$1" in
-                cdd-c|cdd-cpp|cdd-csharp|cdd-go|cdd-java|cdd-kotlin|cdd-php|cdd-python-client|cdd-ruby|cdd-rust|cdd-sh|cdd-swift|cdd-web-ng) return 0 ;;
+                cdd-c|cdd-cpp|cdd-csharp|cdd-go|cdd-java|cdd-kotlin|cdd-php|cdd-python-client|cdd-ruby|cdd-rust|cdd-sh|cdd-swift|cdd-ts) return 0 ;;
                 *) return 1 ;;
             esac
           }

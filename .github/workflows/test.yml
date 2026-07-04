@@ -20,7 +20,7 @@ jobs:
 
     steps:
       - name: Checkout repo and submodules
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -29,10 +29,10 @@ jobs:
         with:
           node-version: 'lts/*'
           cache: 'npm'
-          cache-dependency-path: 'cdd-web-ng/package-lock.json'
+          cache-dependency-path: 'cdd-ts/package-lock.json'
 
-      - name: Install dependencies and build cdd-web-ng
-        working-directory: cdd-web-ng
+      - name: Install dependencies and build cdd-ts
+        working-directory: cdd-ts
         run: |
           if [ -f package-lock.json ]; then
             npm ci
@@ -44,7 +44,7 @@ jobs:
           npx -p @angular/cli ng new angular-client --defaults --skip-git
           cd angular-client
           npx ng add @angular/material --skip-confirmation
-          cd ../cdd-web-ng
+          cd ../cdd-ts
           node dist/cli.js from_openapi -i ../petstore.json --output ../angular-client/src/app/api
 
       - name: Install dependencies and run tests for Angular client
@@ -69,7 +69,7 @@ jobs:
           SWAGGER_BASE_PATH: "/v2"
     steps:
       - name: Checkout repo and submodules
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -91,7 +91,7 @@ jobs:
       - name: Copy Kotlin Integration Tests
         run: |
           mkdir -p kotlin-client/composeApp/src/commonTest/kotlin/com/example/auto
-          cp cdd-kotlin/tests/integration/kotlin-integration.kt kotlin-client/composeApp/src/commonTest/kotlin/com/example/auto/IntegrationTest.kt
+          cp kotlin-integration.kt kotlin-client/composeApp/src/commonTest/kotlin/com/example/auto/IntegrationTest.kt
 
       - name: Test Kotlin Client
         working-directory: kotlin-client
@@ -101,13 +101,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo and submodules
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           submodules: recursive
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
           go-version: '1.25.x'
+          cache-dependency-path: cdd-go/go.sum
+
           cache: true
       - name: Run Go Tests
         working-directory: cdd-go
@@ -117,7 +119,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo and submodules
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           submodules: recursive
       - name: Setup .NET
@@ -135,7 +137,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo and submodules
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           submodules: recursive
       - name: Install dependencies
