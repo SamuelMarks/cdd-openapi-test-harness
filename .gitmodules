@@ -40,3 +40,6 @@
 [submodule "cdd-ruby"]
 	path = cdd-ruby
 	url = https://github.com/SamuelMarks/cdd-ruby
+[submodule "ts-morph"]
+	path = ts-morph
+	url = https://github.com/SamuelMarks/ts-morph.git

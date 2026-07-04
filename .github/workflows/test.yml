@@ -95,7 +95,7 @@ jobs:
 
       - name: Test Kotlin Client
         working-directory: kotlin-client
-        run: ./gradlew test
+        run: gradle test
 
   go-tests:
     runs-on: ubuntu-latest
