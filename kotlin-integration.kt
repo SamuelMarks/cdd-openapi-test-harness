@@ -1,7 +1,7 @@
 package com.example.auto
 
-import com.example.auto.api.PetApi
-import com.example.auto.dto.Pet
+import org.example.api.ApiClient
+import org.example.models.Pet
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
@@ -10,6 +10,7 @@ import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.test.fail
 
 class IntegrationTest {
     private val client = HttpClient {
@@ -22,7 +23,7 @@ class IntegrationTest {
     }
     
     // Fallback to swagger.io but use localhost if possible
-    private val petApi = PetApi(client, "http://localhost:8080/v2")
+    private val petApi = ApiClient(client, "https://petstore.swagger.io/v2")
 
     @Test
     fun testPetOperations() = runTest {
@@ -35,24 +36,26 @@ class IntegrationTest {
         )
 
         // 1. Create Pet
-        var result = petApi.addPet(pet)
-        assertTrue(result.isSuccess, "Failed to create pet")
+        val addResult = petApi.addPet(pet)
+        if (addResult.isFailure) {
+            fail("Failed to create pet: ${addResult.exceptionOrNull()?.message}")
+        }
 
         // 2. Read Pet
-        result = petApi.getPetById(petId.toString())
-        assertTrue(result.isSuccess, "Failed to read pet")
+        val getResult = petApi.getPetById(petId)
+        assertTrue(getResult.isSuccess, "Failed to read pet")
 
         // 3. Update Pet
         val updatedPet = pet.copy(name = "UpdatedKotlinPet", status = "sold")
-        result = petApi.updatePet(updatedPet)
-        assertTrue(result.isSuccess, "Failed to update pet")
+        val updateResult = petApi.updatePet(updatedPet)
+        assertTrue(updateResult.isSuccess, "Failed to update pet")
 
         // 4. Delete Pet
-        result = petApi.deletePet(api_key = "special-key", petId = petId.toString())
-        assertTrue(result.isSuccess, "Failed to delete pet")
+        val deleteResult = petApi.deletePet(api_key = "special-key", petId = petId)
+        assertTrue(deleteResult.isSuccess, "Failed to delete pet")
 
         // 5. Verify 404
-        result = petApi.getPetById(petId.toString())
-        assertTrue(result.isFailure, "Pet should be deleted")
+        val getResult404 = petApi.getPetById(petId)
+        assertTrue(getResult404.isFailure, "Pet should be deleted")
     }
 }
