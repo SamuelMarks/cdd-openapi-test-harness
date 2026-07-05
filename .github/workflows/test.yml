@@ -8,7 +8,7 @@ on:
 
 jobs:
   angular-integration:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     services:
       petstore_server:
         image: swaggerapi/petstore
@@ -34,6 +34,10 @@ jobs:
       - name: Install dependencies and build cdd-ts
         working-directory: cdd-ts
         run: |
+          cd ../ts-morph
+          npm i
+          npm run build
+          cd ../cdd-ts
           if [ -f package-lock.json ]; then
             npm ci
           else
@@ -58,7 +62,7 @@ jobs:
           npm run test -- --watch=false
 
   kotlin-integration:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     services:
       petstore_server:
         image: swaggerapi/petstore
@@ -95,10 +99,10 @@ jobs:
 
       - name: Test Kotlin Client
         working-directory: kotlin-client
-        run: gradle test
+        run: gradle desktopTest
 
   go-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout repo and submodules
         uses: actions/checkout@v7
@@ -116,7 +120,7 @@ jobs:
         run: go test -v -coverprofile=coverage.out ./...
 
   csharp-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout repo and submodules
         uses: actions/checkout@v7
@@ -134,7 +138,7 @@ jobs:
           dotnet test tests/Cdd.OpenApi.Tests --no-build
 
   sh-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout repo and submodules
         uses: actions/checkout@v7
