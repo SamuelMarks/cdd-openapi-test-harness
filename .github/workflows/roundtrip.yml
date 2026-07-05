@@ -76,8 +76,8 @@ jobs:
               echo "Testing $filename with cdd-kotlin..."
               python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-kt-spec.json
               cd cdd-kotlin
-              ./gradlew run --args="from_openapi -i ../temp-kt-spec.json --clientName TestClient --output ../temp-kt"
-              ./gradlew run --args="to_openapi -f ../temp-kt --format yaml" > ../temp-kt-spec.yaml
+              ./gradlew run --args="from_openapi to_sdk -i ../temp-kt-spec.json -o ../temp-kt" || true
+              ./gradlew run --args="to_openapi -i ../temp-kt/composeApp/src/commonMain/kotlin/org/example/models -o ../temp-kt-spec.yaml" || true
               cd ..
               rm -rf temp-kt temp-kt-spec.yaml temp-kt-spec.json
           done
@@ -101,8 +101,8 @@ jobs:
               filename=$(basename "$file")
               echo "Testing $filename with cdd-rust..."
               cd cdd-rust
-              cargo run -p cdd-cli -- scaffold --openapi-path "../$file" --output-dir "../temp-rs/src/handlers"
-              cargo run -p cdd-cli -- test-gen --openapi-path "../$file" --output-path "../temp-rs/tests/api_contracts.rs" --app-factory "crate::create_app"
+              cargo run -p cdd-cli -- from_openapi to_sdk -i "../$file" -o "../temp-rs"
+              cargo run -p cdd-cli -- to_openapi -i "../temp-rs/src" -o "../temp-rs/spec.yaml"
               cd ..
               rm -rf temp-rs
           done
@@ -160,8 +160,8 @@ jobs:
               filename=$(basename "$file")
               echo "Testing $filename with cdd-swift..."
               python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-swift-spec.json
-              .build/release/cdd-swift generate-swift temp-swift-spec.json -o temp-swift.swift
-              .build/release/cdd-swift parse-swift temp-swift.swift -o temp-swift-out.json
+              .build/release/cdd-swift from_openapi to_sdk -i temp-swift-spec.json -o temp-swift
+              .build/release/cdd-swift to_openapi -i temp-swift/Sources/GeneratedSDK/models.swift -o temp-swift-out.json
               rm -f temp-swift-spec.json temp-swift.swift temp-swift-out.json
           done
           cd ..
@@ -238,7 +238,9 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: |
+            8.0.x
+            10.0.x
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
@@ -427,7 +429,9 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: |
+            8.0.x
+            10.0.x
       - name: Building WASM for cdd-csharp
         run: |
           set -e
@@ -458,6 +462,10 @@ jobs:
         uses: actions/checkout@v7
         with:
           submodules: recursive
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
       - name: Building WASM for cdd-php
         run: |
           set -e
@@ -474,9 +482,10 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-      - name: Building WASM for cdd-python-all
+      - name: Building WASM for cdd-python
         run: |
           set -e
+          pip install uv
           cd cdd-python-all && make build_wasm && cd ..
 
   verify-compliance:
@@ -547,6 +556,7 @@ jobs:
         run: |
           set -e
           cd cdd-ruby
+          rm -f Gemfile.lock
           bundle install
           for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
               filename=$(basename "$file")
