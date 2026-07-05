@@ -158,8 +158,8 @@ jobs:
           for file in OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
               filename=$(basename "$file")
               echo "Testing $filename with cdd-ts..."
-              node cdd-ts/dist/cli.js from_openapi -i "$file" --output temp-ng
-              node cdd-ts/dist/cli.js to_openapi -f temp-ng --format yaml > temp-ng-spec.yaml
+              node cdd-ts/dist/cli.js from_openapi to_sdk -i "$file" --output temp-ng
+              node cdd-ts/dist/cli.js to_openapi -i temp-ng --format yaml > temp-ng-spec.yaml
               rm -rf temp-ng temp-ng-spec.yaml
           done
           fi

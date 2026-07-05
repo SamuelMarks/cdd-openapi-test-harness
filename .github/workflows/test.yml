@@ -54,7 +54,7 @@ jobs:
           cd angular-client
           npx ng add @angular/material --skip-confirmation
           cd ../cdd-ts
-          node dist/cli.js from_openapi -i ../petstore.json --output ../angular-client/src/app/api
+          node dist/cli.js from_openapi to_sdk -i ../petstore.json --output ../angular-client/src/app/api
 
       - name: Install dependencies and run tests for Angular client
         working-directory: angular-client
