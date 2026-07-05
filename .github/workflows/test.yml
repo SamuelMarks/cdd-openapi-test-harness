@@ -257,6 +257,7 @@ jobs:
       - name: Run C Integration Tests
         run: |
           set -e
+          cd cdd-c && make install_base && make install_deps && cd ..
           export ONLY_TEST=cdd-c
           python3 local_test.py only-test
 
@@ -278,6 +279,7 @@ jobs:
       - name: Run C++ Integration Tests
         run: |
           set -e
+          cd cdd-cpp && make install_base && make install_deps && cd ..
           export ONLY_TEST=cdd-cpp
           python3 local_test.py only-test
 
@@ -305,6 +307,7 @@ jobs:
       - name: Run Java Integration Tests
         run: |
           set -e
+          cd cdd-java && make install_base && make install_deps && cd ..
           export ONLY_TEST=cdd-java
           python3 local_test.py only-test
 
@@ -330,6 +333,7 @@ jobs:
       - name: Run PHP Integration Tests
         run: |
           set -e
+          cd cdd-php && make install_base && make install_deps && cd ..
           export ONLY_TEST=cdd-php
           python3 local_test.py only-test
 
