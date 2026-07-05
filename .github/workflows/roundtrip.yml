@@ -159,7 +159,7 @@ jobs:
               filename=$(basename "$file")
               echo "Testing $filename with cdd-ts..."
               node cdd-ts/dist/cli.js from_openapi to_sdk -i "$file" --output temp-ng
-              node cdd-ts/dist/cli.js to_openapi -i temp-ng --format yaml > temp-ng-spec.yaml
+              node cdd-ts/dist/cli.js to_openapi -i temp-ng/src --format yaml > temp-ng-spec.yaml
               rm -rf temp-ng temp-ng-spec.yaml
           done
           fi
