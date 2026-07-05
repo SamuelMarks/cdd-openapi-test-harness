@@ -120,17 +120,17 @@ jobs:
       - name: Install and run CDD Python Client Roundtrip Tests
         run: |
           set -e
-          cd cdd-python-client
+          cd cdd-python-all
           pip install pyyaml
           pip install -e .
           for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
               filename=$(basename "$file")
-              echo "Testing $filename with cdd-python-client..."
+              echo "Testing $filename with cdd-python-all..."
               mkdir -p temp-py
               python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-py-spec.json
-              cdd sync --from-openapi temp-py-spec.json --to-python temp-py/
-              cdd sync --dir temp-py/
-              rm -rf temp-py temp-py-spec.json
+              cdd-python from_openapi to_sdk -i temp-py-spec.json -o temp-py
+              cdd-python to_openapi -i temp-py -o temp-py-out.json
+              rm -rf temp-py temp-py-spec.json temp-py-out.json
           done
           cd ..
 
@@ -301,7 +301,7 @@ jobs:
           set -e
           cd cdd-php && make install_base && make install_deps && make test && cd ..
 
-  wasm-builds:
+  wasm-build-cpp:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo and submodules
@@ -312,42 +312,72 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+      - name: Building WASM for cdd-cpp
+        run: |
+          set -e
+          cd cdd-cpp && python3 -c "import sys; sys.path.append('scripts'); import run_pre_commit_checks as r; r.build_wasm()" && cd ..
+
+  wasm-build-csharp:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
+      - name: Building WASM for cdd-csharp
+        run: |
+          set -e
+          cd cdd-csharp && make build_wasm && cd ..
+
+  wasm-build-go:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
           go-version: '1.25.x'
           cache-dependency-path: cdd-go/go.sum
           cache: true
-      - name: Setting up Emscripten SDK
+      - name: Building WASM for cdd-go
         run: |
           set -e
-          if [ ! -d "emsdk" ]; then
-            git clone https://github.com/emscripten-core/emsdk.git
-            cd emsdk
-            ./emsdk install latest
-            ./emsdk activate latest
-            cd ..
-          fi
-          source emsdk/emsdk_env.sh
-          
-          echo "Building WASM for cdd-cpp"
-          cd cdd-cpp && make build_wasm && cd ..
-          
-          echo "Building WASM for cdd-csharp"
-          cd cdd-csharp && make build_wasm && cd ..
-          
-          echo "Building WASM for cdd-go"
           cd cdd-go && make build_wasm && cd ..
-          
-          echo "Building WASM for cdd-php"
+
+  wasm-build-php:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Building WASM for cdd-php
+        run: |
+          set -e
           cd cdd-php && make build_wasm && cd ..
-          
-          echo "Building WASM for cdd-python-client"
-          cd cdd-python-client && make build_wasm && cd ..
+
+  wasm-build-python:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Building WASM for cdd-python-all
+        run: |
+          set -e
+          cd cdd-python-all && make build_wasm && cd ..
 
   verify-compliance:
     runs-on: ubuntu-latest
