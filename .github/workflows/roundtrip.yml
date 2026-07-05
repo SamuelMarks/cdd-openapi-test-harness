@@ -278,58 +278,17 @@ jobs:
           python-version: '3.11'
       - name: Install Python deps
         run: pip install pyyaml
-      - name: Run CDD PHP Roundtrip Tests
-        run: |
-          set -e
-          cd cdd-php
-          for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
-              filename=$(basename "$file")
-              echo "Testing $filename with cdd-php..."
-              mkdir -p ../temp-php
-              python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > ../temp-php-spec.json
-              php bin/cdd-php from_openapi to_sdk -i ../temp-php-spec.json -o ../temp-php || true
-              php bin/cdd-php to_openapi -i ../temp-php -o ../temp-php/spec.yaml || true
-              rm -rf ../temp-php ../temp-php-spec.json
-          done
-
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-      - name: Install Python deps
-        run: pip install pyyaml
       - name: Run CDD Java Roundtrip Tests
         run: |
           set -e
           cd cdd-java
           for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
-              filename=$(basename "$file")
-              echo "Testing $filename with cdd-java..."
+              echo "Testing file with cdd-java..."
               mkdir -p ../temp-java
               python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > ../temp-java-spec.json
               ./gradlew run --args="from_openapi to_sdk -i ../temp-java-spec.json -o ../temp-java" || true
               ./gradlew run --args="to_openapi -i ../temp-java -o ../temp-java/spec.yaml" || true
               rm -rf ../temp-java ../temp-java-spec.json
-          done
-
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-      - name: Install Python deps
-        run: pip install pyyaml
-      - name: Run CDD C++ Roundtrip Tests
-        run: |
-          set -e
-          cd cdd-cpp
-          for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
-              filename=$(basename "$file")
-              echo "Testing $filename with cdd-cpp..."
-              mkdir -p ../temp-cpp
-              python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > ../temp-cpp-spec.json
-              ./bin/cdd-cpp from_openapi to_sdk -i ../temp-cpp-spec.json -o ../temp-cpp || true
-              ./bin/cdd-cpp to_openapi -i ../temp-cpp -o ../temp-cpp/spec.yaml || true
-              rm -rf ../temp-cpp ../temp-cpp-spec.json
           done
 
 
@@ -356,18 +315,17 @@ jobs:
           python-version: '3.11'
       - name: Install Python deps
         run: pip install pyyaml
-      - name: Run CDD C++ Roundtrip Tests
+      - name: Run CDD PHP Roundtrip Tests
         run: |
           set -e
-          cd cdd-cpp
+          cd cdd-php
           for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
-              filename=$(basename "$file")
-              echo "Testing $filename with cdd-cpp..."
-              mkdir -p ../temp-cpp
-              python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > ../temp-cpp-spec.json
-              ./bin/cdd-cpp from_openapi to_sdk -i ../temp-cpp-spec.json -o ../temp-cpp || true
-              ./bin/cdd-cpp to_openapi -i ../temp-cpp -o ../temp-cpp/spec.yaml || true
-              rm -rf ../temp-cpp ../temp-cpp-spec.json
+              echo "Testing file with cdd-php..."
+              mkdir -p ../temp-php
+              python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > ../temp-php-spec.json
+              php bin/cdd-php from_openapi to_sdk -i ../temp-php-spec.json -o ../temp-php || true
+              php bin/cdd-php to_openapi -i ../temp-php -o ../temp-php/spec.yaml || true
+              rm -rf ../temp-php ../temp-php-spec.json
           done
 
 
@@ -435,6 +393,7 @@ jobs:
       - name: Building WASM for cdd-csharp
         run: |
           set -e
+          dotnet workload install wasm-tools
           cd cdd-csharp && make build_wasm && cd ..
 
   wasm-build-go:

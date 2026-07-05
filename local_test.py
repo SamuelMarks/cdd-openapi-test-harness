@@ -363,7 +363,7 @@ def test_cdd_python_all(spec_file: str) -> None:
     with chdir("cdd-python-all"):
         run_cmd(["make", "test"])
         shutil.rmtree("../cdd-python-client", ignore_errors=True)
-        run_cmd(["uv", "run", "python", "-m", "openapi_client.cli", "from_openapi", "to_sdk", "-i", f"../{spec_file}", "-o", "../cdd-python-client"])
+        run_cmd(["uv", "run", "python", "-m", "openapi_client.cli", "from_openapi", "to_sdk", "-i", f"../{spec_file}", "-o", "../cdd-python-client", "--tests"])
         
     with chdir("cdd-python-client"):
         run_cmd([sys.executable, "-m", "venv", ".venv"])
@@ -445,12 +445,14 @@ def test_cdd_php(spec_file: str) -> None:
 def test_cdd_ruby(spec_file: str) -> None:
     """Executes native tests for cdd-ruby toolchain."""
     with chdir("cdd-ruby"):
+        if os.path.exists("Gemfile.lock"): os.remove("Gemfile.lock")
         run_cmd(xcmd(["bundle", "install"]))
         run_cmd(xcmd(["bundle", "exec", "rspec"]))
         shutil.rmtree("../cdd-ruby-client", ignore_errors=True)
         run_cmd(xcmd(["ruby", "bin/cdd-ruby", "from_openapi", "to_sdk", "-i", f"../{spec_file}", "-o", "../cdd-ruby-client"]))
         
     with chdir("cdd-ruby-client"):
+        if os.path.exists("Gemfile.lock"): os.remove("Gemfile.lock")
         run_cmd(xcmd(["bundle", "install"]))
         run_cmd(xcmd(["bundle", "exec", "rspec"]))
 
@@ -487,55 +489,55 @@ def run_test() -> None:
     
     for spec_name in specs:
         base_path = "/v2" if spec_name == "petstore.json" else "/api/v3"
-        run_test_with_audit("cdd-ts", spec_name, base_path, lambda: test_cdd_ts(spec_name))
+        if not run_test_with_audit("cdd-ts", spec_name, base_path, lambda: test_cdd_ts(spec_name)): sys.exit(1)
         
     for spec_name in specs:
         base_path = "/v2" if spec_name == "petstore.json" else "/api/v3"
-        run_test_with_audit("cdd-kotlin", spec_name, base_path, lambda: test_cdd_kotlin(spec_name))
+        if not run_test_with_audit("cdd-kotlin", spec_name, base_path, lambda: test_cdd_kotlin(spec_name)): sys.exit(1)
         
     for spec_name in specs:
         base_path = "/v2" if spec_name == "petstore.json" else "/api/v3"
-        run_test_with_audit("cdd-go", spec_name, base_path, lambda: test_cdd_go(spec_name))
+        if not run_test_with_audit("cdd-go", spec_name, base_path, lambda: test_cdd_go(spec_name)): sys.exit(1)
         
     for spec_name in specs:
         base_path = "/v2" if spec_name == "petstore.json" else "/api/v3"
-        run_test_with_audit("cdd-csharp", spec_name, base_path, lambda: test_cdd_csharp(spec_name))
+        if not run_test_with_audit("cdd-csharp", spec_name, base_path, lambda: test_cdd_csharp(spec_name)): sys.exit(1)
         
     for spec_name in specs:
         base_path = "/v2" if spec_name == "petstore.json" else "/api/v3"
-        run_test_with_audit("cdd-python-all", spec_name, base_path, lambda: test_cdd_python_all(spec_name))
+        if not run_test_with_audit("cdd-python-all", spec_name, base_path, lambda: test_cdd_python_all(spec_name)): sys.exit(1)
         
     for spec_name in specs:
         base_path = "/v2" if spec_name == "petstore.json" else "/api/v3"
-        run_test_with_audit("cdd-rust", spec_name, base_path, lambda: test_cdd_rust(spec_name))
+        if not run_test_with_audit("cdd-rust", spec_name, base_path, lambda: test_cdd_rust(spec_name)): sys.exit(1)
         
     for spec_name in specs:
         base_path = "/v2" if spec_name == "petstore.json" else "/api/v3"
-        run_test_with_audit("cdd-swift", spec_name, base_path, lambda: test_cdd_swift(spec_name))
+        if not run_test_with_audit("cdd-swift", spec_name, base_path, lambda: test_cdd_swift(spec_name)): sys.exit(1)
         
     for spec_name in specs:
         base_path = "/v2" if spec_name == "petstore.json" else "/api/v3"
-        run_test_with_audit("cdd-c", spec_name, base_path, lambda: test_cdd_c(spec_name))
+        if not run_test_with_audit("cdd-c", spec_name, base_path, lambda: test_cdd_c(spec_name)): sys.exit(1)
         
     for spec_name in specs:
         base_path = "/v2" if spec_name == "petstore.json" else "/api/v3"
-        run_test_with_audit("cdd-cpp", spec_name, base_path, lambda: test_cdd_cpp(spec_name))
+        if not run_test_with_audit("cdd-cpp", spec_name, base_path, lambda: test_cdd_cpp(spec_name)): sys.exit(1)
         
     for spec_name in specs:
         base_path = "/v2" if spec_name == "petstore.json" else "/api/v3"
-        run_test_with_audit("cdd-java", spec_name, base_path, lambda: test_cdd_java(spec_name))
+        if not run_test_with_audit("cdd-java", spec_name, base_path, lambda: test_cdd_java(spec_name)): sys.exit(1)
         
     for spec_name in specs:
         base_path = "/v2" if spec_name == "petstore.json" else "/api/v3"
-        run_test_with_audit("cdd-php", spec_name, base_path, lambda: test_cdd_php(spec_name))
+        if not run_test_with_audit("cdd-php", spec_name, base_path, lambda: test_cdd_php(spec_name)): sys.exit(1)
         
     for spec_name in specs:
         base_path = "/v2" if spec_name == "petstore.json" else "/api/v3"
-        run_test_with_audit("cdd-ruby", spec_name, base_path, lambda: test_cdd_ruby(spec_name))
+        if not run_test_with_audit("cdd-ruby", spec_name, base_path, lambda: test_cdd_ruby(spec_name)): sys.exit(1)
         
     for spec_name in specs:
         base_path = "/v2" if spec_name == "petstore.json" else "/api/v3"
-        run_test_with_audit("cdd-sh", spec_name, base_path, lambda: test_cdd_sh(spec_name))
+        if not run_test_with_audit("cdd-sh", spec_name, base_path, lambda: test_cdd_sh(spec_name)): sys.exit(1)
 
 def run_roundtrip() -> None:
     """Executes roundtrip tests against OpenAPI schemas for all enabled toolchains."""
