@@ -159,3 +159,204 @@ jobs:
       - name: Verify Shellcheck
         working-directory: cdd-sh
         run: shellcheck cdd.sh src/*/*.sh
+
+  python-tests:
+    runs-on: ubuntu-latest
+    services:
+      petstore_server:
+        image: swaggerapi/petstore
+        ports:
+          - "8080:8080"
+        env:
+          SWAGGER_HOST: "http://localhost:8080"
+          SWAGGER_BASE_PATH: "/v2"
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Run Python Integration Tests
+        run: |
+          set -e
+          export ONLY_TEST=cdd-python-all
+          python3 local_test.py only-test
+
+  rust-tests:
+    runs-on: ubuntu-latest
+    services:
+      petstore_server:
+        image: swaggerapi/petstore
+        ports:
+          - "8080:8080"
+        env:
+          SWAGGER_HOST: "http://localhost:8080"
+          SWAGGER_BASE_PATH: "/v2"
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Setup Rust nightly
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+      - name: Run Rust Integration Tests
+        run: |
+          set -e
+          export ONLY_TEST=cdd-rust
+          python3 local_test.py only-test
+
+  swift-tests:
+    runs-on: ubuntu-latest
+    services:
+      petstore_server:
+        image: swaggerapi/petstore
+        ports:
+          - "8080:8080"
+        env:
+          SWAGGER_HOST: "http://localhost:8080"
+          SWAGGER_BASE_PATH: "/v2"
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Setup Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: '6.0'
+      - name: Run Swift Integration Tests
+        run: |
+          set -e
+          export ONLY_TEST=cdd-swift
+          python3 local_test.py only-test
+
+  c-tests:
+    runs-on: ubuntu-latest
+    services:
+      petstore_server:
+        image: swaggerapi/petstore
+        ports:
+          - "8080:8080"
+        env:
+          SWAGGER_HOST: "http://localhost:8080"
+          SWAGGER_BASE_PATH: "/v2"
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Run C Integration Tests
+        run: |
+          set -e
+          cd cdd-c && make install_base && make install_deps && cd ..
+          export ONLY_TEST=cdd-c
+          python3 local_test.py only-test
+
+  cpp-tests:
+    runs-on: ubuntu-latest
+    services:
+      petstore_server:
+        image: swaggerapi/petstore
+        ports:
+          - "8080:8080"
+        env:
+          SWAGGER_HOST: "http://localhost:8080"
+          SWAGGER_BASE_PATH: "/v2"
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Run C++ Integration Tests
+        run: |
+          set -e
+          cd cdd-cpp && make install_base && make install_deps && cd ..
+          export ONLY_TEST=cdd-cpp
+          python3 local_test.py only-test
+
+  java-tests:
+    runs-on: ubuntu-latest
+    services:
+      petstore_server:
+        image: swaggerapi/petstore
+        ports:
+          - "8080:8080"
+        env:
+          SWAGGER_HOST: "http://localhost:8080"
+          SWAGGER_BASE_PATH: "/v2"
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+          cache: 'gradle'
+      - name: Run Java Integration Tests
+        run: |
+          set -e
+          cd cdd-java && make install_base && make install_deps && cd ..
+          export ONLY_TEST=cdd-java
+          python3 local_test.py only-test
+
+  php-tests:
+    runs-on: ubuntu-latest
+    services:
+      petstore_server:
+        image: swaggerapi/petstore
+        ports:
+          - "8080:8080"
+        env:
+          SWAGGER_HOST: "http://localhost:8080"
+          SWAGGER_BASE_PATH: "/v2"
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+      - name: Run PHP Integration Tests
+        run: |
+          set -e
+          cd cdd-php && make install_base && make install_deps && cd ..
+          export ONLY_TEST=cdd-php
+          python3 local_test.py only-test
+
+  ruby-tests:
+    runs-on: ubuntu-latest
+    services:
+      petstore_server:
+        image: swaggerapi/petstore
+        ports:
+          - "8080:8080"
+        env:
+          SWAGGER_HOST: "http://localhost:8080"
+          SWAGGER_BASE_PATH: "/v2"
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+      - name: Run Ruby Integration Tests
+        run: |
+          set -e
+          export ONLY_TEST=cdd-ruby
+          python3 local_test.py only-test

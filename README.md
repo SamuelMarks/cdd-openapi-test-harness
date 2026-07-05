@@ -1,6 +1,7 @@
 cdd-openapi-test-harness
 ========================
 
+[![Integration Test Suite](https://github.com/SamuelMarks/cdd-openapi-test-harness/actions/workflows/test.yml/badge.svg)](https://github.com/SamuelMarks/cdd-openapi-test-harness/actions/workflows/test.yml)
 [![Roundtrip Test Suite](https://github.com/SamuelMarks/cdd-openapi-test-harness/actions/workflows/roundtrip.yml/badge.svg)](https://github.com/SamuelMarks/cdd-openapi-test-harness/actions/workflows/roundtrip.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
@@ -89,7 +90,7 @@ This repository tests both the native builds and WebAssembly (WASM) targets (if 
 
 ## Setup & CI
 
-GitHub actions are implemented in `.github/workflows/roundtrip.yml` to automatically initialize the submodules, configure the language environments (Node, Java, Rust, Python, Swift, Go, .NET, Bash), and execute the roundtrip test suites across each language.
+GitHub actions are implemented in `.github/workflows/roundtrip.yml` and `.github/workflows/test.yml` to automatically initialize the submodules, configure the language environments (Node, Java, Rust, Python, Swift, Go, .NET, Bash, Ruby, C/C++, PHP), and execute the roundtrip and integration test suites across all 13 supported languages.
 
 See [USAGE.md](USAGE.md) for local development and testing instructions.
 

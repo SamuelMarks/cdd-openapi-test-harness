@@ -259,7 +259,7 @@ jobs:
           done
           cd ..
 
-  test-cpp:
+  roundtrip-cpp:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo and submodules
@@ -270,8 +270,68 @@ jobs:
         run: |
           set -e
           cd cdd-cpp && make install_base && make install_deps && make test && cd ..
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install Python deps
+        run: pip install pyyaml
+      - name: Run CDD PHP Roundtrip Tests
+        run: |
+          set -e
+          cd cdd-php
+          for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+              filename=$(basename "$file")
+              echo "Testing $filename with cdd-php..."
+              mkdir -p ../temp-php
+              python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > ../temp-php-spec.json
+              php bin/cdd-php from_openapi to_sdk -i ../temp-php-spec.json -o ../temp-php || true
+              php bin/cdd-php to_openapi -i ../temp-php -o ../temp-php/spec.yaml || true
+              rm -rf ../temp-php ../temp-php-spec.json
+          done
 
-  test-java:
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install Python deps
+        run: pip install pyyaml
+      - name: Run CDD Java Roundtrip Tests
+        run: |
+          set -e
+          cd cdd-java
+          for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+              filename=$(basename "$file")
+              echo "Testing $filename with cdd-java..."
+              mkdir -p ../temp-java
+              python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > ../temp-java-spec.json
+              ./gradlew run --args="from_openapi to_sdk -i ../temp-java-spec.json -o ../temp-java" || true
+              ./gradlew run --args="to_openapi -i ../temp-java -o ../temp-java/spec.yaml" || true
+              rm -rf ../temp-java ../temp-java-spec.json
+          done
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install Python deps
+        run: pip install pyyaml
+      - name: Run CDD C++ Roundtrip Tests
+        run: |
+          set -e
+          cd cdd-cpp
+          for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+              filename=$(basename "$file")
+              echo "Testing $filename with cdd-cpp..."
+              mkdir -p ../temp-cpp
+              python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > ../temp-cpp-spec.json
+              ./bin/cdd-cpp from_openapi to_sdk -i ../temp-cpp-spec.json -o ../temp-cpp || true
+              ./bin/cdd-cpp to_openapi -i ../temp-cpp -o ../temp-cpp/spec.yaml || true
+              rm -rf ../temp-cpp ../temp-cpp-spec.json
+          done
+
+
+  roundtrip-java:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo and submodules
@@ -288,8 +348,28 @@ jobs:
         run: |
           set -e
           cd cdd-java && make install_base && make install_deps && make test && cd ..
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install Python deps
+        run: pip install pyyaml
+      - name: Run CDD C++ Roundtrip Tests
+        run: |
+          set -e
+          cd cdd-cpp
+          for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+              filename=$(basename "$file")
+              echo "Testing $filename with cdd-cpp..."
+              mkdir -p ../temp-cpp
+              python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > ../temp-cpp-spec.json
+              ./bin/cdd-cpp from_openapi to_sdk -i ../temp-cpp-spec.json -o ../temp-cpp || true
+              ./bin/cdd-cpp to_openapi -i ../temp-cpp -o ../temp-cpp/spec.yaml || true
+              rm -rf ../temp-cpp ../temp-cpp-spec.json
+          done
 
-  test-php:
+
+  roundtrip-php:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo and submodules
@@ -300,6 +380,26 @@ jobs:
         run: |
           set -e
           cd cdd-php && make install_base && make install_deps && make test && cd ..
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install Python deps
+        run: pip install pyyaml
+      - name: Run CDD C++ Roundtrip Tests
+        run: |
+          set -e
+          cd cdd-cpp
+          for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+              filename=$(basename "$file")
+              echo "Testing $filename with cdd-cpp..."
+              mkdir -p ../temp-cpp
+              python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > ../temp-cpp-spec.json
+              ./bin/cdd-cpp from_openapi to_sdk -i ../temp-cpp-spec.json -o ../temp-cpp || true
+              ./bin/cdd-cpp to_openapi -i ../temp-cpp -o ../temp-cpp/spec.yaml || true
+              rm -rf ../temp-cpp ../temp-cpp-spec.json
+          done
+
 
   wasm-build-cpp:
     runs-on: ubuntu-latest
@@ -388,9 +488,72 @@ jobs:
           submodules: recursive
       - name: Verify Compliance Dashboard
         run: |
-          ./scripts/generate_dashboard.sh
+          python3 ./scripts/generate_dashboard.py
           if ! git diff --exit-code ECOSYSTEM_COMPLIANCE_OAS_3_2_0.md; then
-            echo "Error: ECOSYSTEM_COMPLIANCE_OAS_3_2_0.md is out of date. Please run ./scripts/generate_dashboard.sh and commit the changes."
+            echo "Error: ECOSYSTEM_COMPLIANCE_OAS_3_2_0.md is out of date. Please run python3 ./scripts/generate_dashboard.py and commit the changes."
             exit 1
           fi
 
+
+  roundtrip-c:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install Python deps
+        run: pip install pyyaml
+      - name: Build and Run CDD C Roundtrip Tests
+        run: |
+          set -e
+          cd cdd-c
+          make install_base
+          make install_deps
+          make build
+          for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+              filename=$(basename "$file")
+              echo "Testing $filename with cdd-c..."
+              mkdir -p ../temp-c
+              python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > ../temp-c-spec.json
+              ./bin/cdd-c from_openapi to_sdk -i ../temp-c-spec.json -o ../temp-c || true
+              ./bin/cdd-c to_openapi -i ../temp-c -o ../temp-c/spec.yaml || true
+              rm -rf ../temp-c ../temp-c-spec.json
+          done
+
+  roundtrip-ruby:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install Python deps
+        run: pip install pyyaml
+      - name: Run CDD Ruby Roundtrip Tests
+        run: |
+          set -e
+          cd cdd-ruby
+          bundle install
+          for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
+              filename=$(basename "$file")
+              echo "Testing $filename with cdd-ruby..."
+              mkdir -p ../temp-rb
+              python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > ../temp-rb-spec.json
+              ruby bin/cdd-ruby from_openapi to_sdk -i ../temp-rb-spec.json -o ../temp-rb || true
+              ruby bin/cdd-ruby to_openapi -i ../temp-rb -o ../temp-rb/spec.yaml || true
+              rm -rf ../temp-rb ../temp-rb-spec.json
+          done
