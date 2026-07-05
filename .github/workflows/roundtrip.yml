@@ -6,72 +6,24 @@ on:
   pull_request:
     branches: [ "master" ]
 
-
 jobs:
-  roundtrip-tests:
+  roundtrip-ts:
     runs-on: ubuntu-latest
-    env:
-      IGNORE_TESTS: "cdd-c,cdd-ruby"
-      TARGET_TYPE: "all"
-      ONLY_TEST: ""
     steps:
       - name: Checkout repo and submodules
         uses: actions/checkout@v7
         with:
           submodules: recursive
-
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
           node-version: 'lts/*'
           cache: 'npm'
           cache-dependency-path: 'cdd-ts/package-lock.json'
-
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: 'zulu'
-          java-version: '21'
-          cache: 'gradle'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
-
-      - name: Setup Rust nightly
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: nightly
-          override: true
-
-      - name: Setup Swift
-        uses: swift-actions/setup-swift@v2
-        with:
-          swift-version: '6.0'
-
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-
-      - name: Setup Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: '1.25.x'
-          cache-dependency-path: cdd-go/go.sum
-
-          cache: true
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: '10.0.x'
-
       - name: Setup Deno
         uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-
       - name: Install dependencies and build cdd-ts
         working-directory: cdd-ts
         run: |
@@ -85,76 +37,9 @@ jobs:
             npm i
           fi
           npm run build
-
-      - name: Run Roundtrip Tests for all submodules
+      - name: Run CDD Web NG Roundtrip Tests
         run: |
           set -e
-
-          is_client() {
-            case "$1" in
-                cdd-c|cdd-cpp|cdd-csharp|cdd-go|cdd-java|cdd-kotlin|cdd-php|cdd-python-client|cdd-ruby|cdd-rust|cdd-sh|cdd-swift|cdd-ts) return 0 ;;
-                *) return 1 ;;
-            esac
-          }
-
-          is_server() {
-            case "$1" in
-                cdd-rust) return 0 ;;
-                *) return 1 ;;
-            esac
-          }
-
-          should_run() {
-            if [ -n "$ONLY_TEST" ]; then
-              if echo "$ONLY_TEST" | tr ',' '\n' | grep -q "^$1$"; then
-                return 0
-              else
-                return 1
-              fi
-            fi
-
-            if [ -n "$IGNORE_TESTS" ] && echo "$IGNORE_TESTS" | tr ',' '\n' | grep -q "^$1$"; then
-              echo "Skipping $1 (in IGNORE_TESTS)"
-              return 1
-            fi
-            if [ "${TARGET_TYPE:-all}" = "client" ] && ! is_client "$1"; then
-              echo "Skipping $1 (not a client)"
-              return 1
-            fi
-            if [ "${TARGET_TYPE:-all}" = "server" ] && ! is_server "$1"; then
-              echo "Skipping $1 (not a server)"
-              return 1
-            fi
-            return 0
-          }
-
-          is_server() {
-            case "$1" in
-                cdd-rust) return 0 ;;
-                *) return 1 ;;
-            esac
-          }
-
-          should_run() {
-            if echo "$IGNORE_TESTS" | tr ',' '\n' | grep -q "^$1$"; then
-              echo "Skipping $1 (in IGNORE_TESTS)"
-              return 1
-            fi
-            if [ "${TARGET_TYPE:-all}" = "client" ] && ! is_client "$1"; then
-              echo "Skipping $1 (not a client)"
-              return 1
-            fi
-            if [ "${TARGET_TYPE:-all}" = "server" ] && ! is_server "$1"; then
-              echo "Skipping $1 (not a server)"
-              return 1
-            fi
-            return 0
-          }
-          
-          if should_run "cdd-ts"; then
-          echo "==================================="
-          echo "Running CDD Web NG Roundtrip Tests"
-          echo "==================================="
           for file in OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
               filename=$(basename "$file")
               echo "Testing $filename with cdd-ts..."
@@ -162,27 +47,56 @@ jobs:
               node cdd-ts/dist/cli.js to_openapi -i temp-ng/src --format yaml > temp-ng-spec.yaml
               rm -rf temp-ng temp-ng-spec.yaml
           done
-          fi
-
-          if should_run "cdd-kotlin"; then
-          echo "==================================="
-          echo "Running CDD Kotlin Roundtrip Tests"
-          echo "==================================="
+  roundtrip-kotlin:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install Python deps
+        run: pip install pyyaml
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+          cache: 'gradle'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+      - name: Run CDD Kotlin Roundtrip Tests
+        run: |
+          set -e
           for file in OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
               filename=$(basename "$file")
               echo "Testing $filename with cdd-kotlin..."
+              python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-kt-spec.json
               cd cdd-kotlin
-              ./gradlew run --args="from_openapi -i ../$file --clientName TestClient --output ../temp-kt"
+              ./gradlew run --args="from_openapi -i ../temp-kt-spec.json --clientName TestClient --output ../temp-kt"
               ./gradlew run --args="to_openapi -f ../temp-kt --format yaml" > ../temp-kt-spec.yaml
               cd ..
-              rm -rf temp-kt temp-kt-spec.yaml
+              rm -rf temp-kt temp-kt-spec.yaml temp-kt-spec.json
           done
-          fi
-
-          if should_run "cdd-rust"; then
-          echo "==================================="
-          echo "Running CDD Rust Scaffold Tests"
-          echo "==================================="
+  roundtrip-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Setup Rust nightly
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+      - name: Run CDD Rust Scaffold Tests
+        run: |
+          set -e
           for file in OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
               filename=$(basename "$file")
               echo "Testing $filename with cdd-rust..."
@@ -192,17 +106,20 @@ jobs:
               cd ..
               rm -rf temp-rs
           done
-          fi
-
-          echo "All roundtrip tests completed successfully!"
-
+  roundtrip-python:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
       - name: Install and run CDD Python Client Roundtrip Tests
         run: |
           set -e
-          if ! echo "$IGNORE_TESTS" | tr ',' '\n' | grep -q "^cdd-python-client$"; then
-          echo "==================================="
-          echo "Running CDD Python Client Tests"
-          echo "==================================="
           cd cdd-python-client
           pip install pyyaml
           pip install -e .
@@ -216,96 +133,55 @@ jobs:
               rm -rf temp-py temp-py-spec.json
           done
           cd ..
-          else
-            echo "Skipping cdd-python-client (in IGNORE_TESTS)"
-          fi
 
+  roundtrip-swift:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Setup Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: '6.0'
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install Python deps
+        run: pip install pyyaml
       - name: Build and run CDD Swift Roundtrip Tests
         run: |
           set -e
-          is_client() {
-            case "$1" in
-                cdd-c|cdd-cpp|cdd-csharp|cdd-go|cdd-java|cdd-kotlin|cdd-php|cdd-python-client|cdd-ruby|cdd-rust|cdd-sh|cdd-swift|cdd-ts) return 0 ;;
-                *) return 1 ;;
-            esac
-          }
-
-          is_server() {
-            case "$1" in
-                cdd-rust) return 0 ;;
-                *) return 1 ;;
-            esac
-          }
-
-          should_run() {
-            if [ -n "$ONLY_TEST" ]; then
-              if echo "$ONLY_TEST" | tr ',' '\n' | grep -q "^$1$"; then
-                return 0
-              else
-                return 1
-              fi
-            fi
-
-            if [ -n "$IGNORE_TESTS" ] && echo "$IGNORE_TESTS" | tr ',' '\n' | grep -q "^$1$"; then
-              echo "Skipping $1 (in IGNORE_TESTS)"
-              return 1
-            fi
-            if [ "${TARGET_TYPE:-all}" = "client" ] && ! is_client "$1"; then
-              echo "Skipping $1 (not a client)"
-              return 1
-            fi
-            if [ "${TARGET_TYPE:-all}" = "server" ] && ! is_server "$1"; then
-              echo "Skipping $1 (not a server)"
-              return 1
-            fi
-            return 0
-          }
-
-          is_server() {
-            case "$1" in
-                cdd-rust) return 0 ;;
-                *) return 1 ;;
-            esac
-          }
-
-          should_run() {
-            if echo "$IGNORE_TESTS" | tr ',' '\n' | grep -q "^$1$"; then
-              echo "Skipping $1 (in IGNORE_TESTS)"
-              return 1
-            fi
-            if [ "${TARGET_TYPE:-all}" = "client" ] && ! is_client "$1"; then
-              echo "Skipping $1 (not a client)"
-              return 1
-            fi
-            if [ "${TARGET_TYPE:-all}" = "server" ] && ! is_server "$1"; then
-              echo "Skipping $1 (not a server)"
-              return 1
-            fi
-            return 0
-          }
-
-          if should_run "cdd-swift"; then
-          echo "==================================="
-          echo "Running CDD Swift Roundtrip Tests"
-          echo "==================================="
           cd cdd-swift
           swift build -c release
           for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
               filename=$(basename "$file")
               echo "Testing $filename with cdd-swift..."
-              # Convert YAML to JSON (assuming python and pyyaml are still in the environment)
               python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-swift-spec.json
               .build/release/cdd-swift generate-swift temp-swift-spec.json -o temp-swift.swift
               .build/release/cdd-swift parse-swift temp-swift.swift -o temp-swift-out.json
               rm -f temp-swift-spec.json temp-swift.swift temp-swift-out.json
           done
           cd ..
-          fi
 
-          if should_run "cdd-sh"; then
-          echo "==================================="
-          echo "Running CDD Shell Roundtrip Tests"
-          echo "==================================="
+  roundtrip-sh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install Python deps
+        run: pip install pyyaml
+      - name: Run CDD Shell Roundtrip Tests
+        run: |
+          set -e
           cd cdd-sh
           for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
               filename=$(basename "$file")
@@ -318,12 +194,29 @@ jobs:
               rm -f temp-sh-spec.json temp-routes.sh temp-sh-out.json ast.json
           done
           cd ..
-          fi
 
-          if should_run "cdd-go"; then
-          echo "==================================="
-          echo "Running CDD Go Roundtrip Tests"
-          echo "==================================="
+  roundtrip-go:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.x'
+          cache-dependency-path: cdd-go/go.sum
+          cache: true
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install Python deps
+        run: pip install pyyaml
+      - name: Run CDD Go Roundtrip Tests
+        run: |
+          set -e
           cd cdd-go
           for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
               filename=$(basename "$file")
@@ -334,12 +227,27 @@ jobs:
               rm -rf temp-go-spec.json temp-go temp-go-out.json
           done
           cd ..
-          fi
 
-          if should_run "cdd-csharp"; then
-          echo "==================================="
-          echo "Running CDD C# Roundtrip Tests"
-          echo "==================================="
+  roundtrip-csharp:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install Python deps
+        run: pip install pyyaml
+      - name: Run CDD C# Roundtrip Tests
+        run: |
+          set -e
           cd cdd-csharp
           for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
               filename=$(basename "$file")
@@ -350,174 +258,73 @@ jobs:
               rm -rf temp-cs-spec.json temp-cs temp-cs-out.json
           done
           cd ..
-          fi
 
-          echo "All roundtrip tests completed successfully for all clients!"
-
-      - name: Run tests for newly added C/C++/Java/PHP/Ruby submodules
+  test-cpp:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Run CDD C++ Tests
         run: |
           set -e
-          is_client() {
-            case "$1" in
-                cdd-c|cdd-cpp|cdd-csharp|cdd-go|cdd-java|cdd-kotlin|cdd-php|cdd-python-client|cdd-ruby|cdd-rust|cdd-sh|cdd-swift|cdd-ts) return 0 ;;
-                *) return 1 ;;
-            esac
-          }
-
-          is_server() {
-            case "$1" in
-                cdd-rust) return 0 ;;
-                *) return 1 ;;
-            esac
-          }
-
-          should_run() {
-            if [ -n "$ONLY_TEST" ]; then
-              if echo "$ONLY_TEST" | tr ',' '\n' | grep -q "^$1$"; then
-                return 0
-              else
-                return 1
-              fi
-            fi
-
-            if [ -n "$IGNORE_TESTS" ] && echo "$IGNORE_TESTS" | tr ',' '\n' | grep -q "^$1$"; then
-              echo "Skipping $1 (in IGNORE_TESTS)"
-              return 1
-            fi
-            if [ "${TARGET_TYPE:-all}" = "client" ] && ! is_client "$1"; then
-              echo "Skipping $1 (not a client)"
-              return 1
-            fi
-            if [ "${TARGET_TYPE:-all}" = "server" ] && ! is_server "$1"; then
-              echo "Skipping $1 (not a server)"
-              return 1
-            fi
-            return 0
-          }
-
-          is_server() {
-            case "$1" in
-                cdd-rust) return 0 ;;
-                *) return 1 ;;
-            esac
-          }
-
-          should_run() {
-            if echo "$IGNORE_TESTS" | tr ',' '\n' | grep -q "^$1$"; then
-              echo "Skipping $1 (in IGNORE_TESTS)"
-              return 1
-            fi
-            if [ "${TARGET_TYPE:-all}" = "client" ] && ! is_client "$1"; then
-              echo "Skipping $1 (not a client)"
-              return 1
-            fi
-            if [ "${TARGET_TYPE:-all}" = "server" ] && ! is_server "$1"; then
-              echo "Skipping $1 (not a server)"
-              return 1
-            fi
-            return 0
-          }
-          if should_run "cdd-c"; then
-          echo "==================================="
-          echo "Running CDD C Tests"
-          echo "==================================="
-          cd cdd-c && make install_base && make install_deps && make test && cd ..
-          fi
-
-          if should_run "cdd-cpp"; then
-          echo "==================================="
-          echo "Running CDD C++ Tests"
-          echo "==================================="
           cd cdd-cpp && make install_base && make install_deps && make test && cd ..
-          fi
 
-          if should_run "cdd-java"; then
-          echo "==================================="
-          echo "Running CDD Java Tests"
-          echo "==================================="
-          cd cdd-java && make install_base && make install_deps && make test && cd ..
-          fi
-
-          if should_run "cdd-php"; then
-          echo "==================================="
-          echo "Running CDD PHP Tests"
-          echo "==================================="
-          cd cdd-php && make install_base && make install_deps && make test && cd ..
-          fi
-
-          if should_run "cdd-ruby"; then
-          echo "==================================="
-          echo "Running CDD Ruby Tests"
-          echo "==================================="
-          cd cdd-ruby && make install_base && make install_deps && make test && cd ..
-          fi
-
-      - name: Build WASM targets
+  test-java:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+          cache: 'gradle'
+      - name: Run CDD Java Tests
         run: |
           set -e
-          is_client() {
-            case "$1" in
-                cdd-c|cdd-cpp|cdd-csharp|cdd-go|cdd-java|cdd-kotlin|cdd-php|cdd-python-client|cdd-ruby|cdd-rust|cdd-sh|cdd-swift|cdd-ts) return 0 ;;
-                *) return 1 ;;
-            esac
-          }
+          cd cdd-java && make install_base && make install_deps && make test && cd ..
 
-          is_server() {
-            case "$1" in
-                cdd-rust) return 0 ;;
-                *) return 1 ;;
-            esac
-          }
+  test-php:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Run CDD PHP Tests
+        run: |
+          set -e
+          cd cdd-php && make install_base && make install_deps && make test && cd ..
 
-          should_run() {
-            if [ -n "$ONLY_TEST" ]; then
-              if echo "$ONLY_TEST" | tr ',' '\n' | grep -q "^$1$"; then
-                return 0
-              else
-                return 1
-              fi
-            fi
-
-            if [ -n "$IGNORE_TESTS" ] && echo "$IGNORE_TESTS" | tr ',' '\n' | grep -q "^$1$"; then
-              echo "Skipping $1 (in IGNORE_TESTS)"
-              return 1
-            fi
-            if [ "${TARGET_TYPE:-all}" = "client" ] && ! is_client "$1"; then
-              echo "Skipping $1 (not a client)"
-              return 1
-            fi
-            if [ "${TARGET_TYPE:-all}" = "server" ] && ! is_server "$1"; then
-              echo "Skipping $1 (not a server)"
-              return 1
-            fi
-            return 0
-          }
-
-          is_server() {
-            case "$1" in
-                cdd-rust) return 0 ;;
-                *) return 1 ;;
-            esac
-          }
-
-          should_run() {
-            if echo "$IGNORE_TESTS" | tr ',' '\n' | grep -q "^$1$"; then
-              echo "Skipping $1 (in IGNORE_TESTS)"
-              return 1
-            fi
-            if [ "${TARGET_TYPE:-all}" = "client" ] && ! is_client "$1"; then
-              echo "Skipping $1 (not a client)"
-              return 1
-            fi
-            if [ "${TARGET_TYPE:-all}" = "server" ] && ! is_server "$1"; then
-              echo "Skipping $1 (not a server)"
-              return 1
-            fi
-            return 0
-          }
-          echo "==================================="
-          echo "Setting up Emscripten SDK"
-          echo "==================================="
+  wasm-builds:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.x'
+          cache-dependency-path: cdd-go/go.sum
+          cache: true
+      - name: Setting up Emscripten SDK
+        run: |
+          set -e
           if [ ! -d "emsdk" ]; then
             git clone https://github.com/emscripten-core/emsdk.git
             cd emsdk
@@ -525,56 +332,30 @@ jobs:
             ./emsdk activate latest
             cd ..
           fi
-
-          if should_run "cdd-c"; then
-          echo "==================================="
-          echo "Building WASM for cdd-c"
-          echo "==================================="
-          cd cdd-c && make build_wasm && cd ..
-          fi
-
-          if should_run "cdd-cpp"; then
-          echo "==================================="
+          source emsdk/emsdk_env.sh
+          
           echo "Building WASM for cdd-cpp"
-          echo "==================================="
           cd cdd-cpp && make build_wasm && cd ..
-          fi
-
-          if should_run "cdd-csharp"; then
-          echo "==================================="
+          
           echo "Building WASM for cdd-csharp"
-          echo "==================================="
           cd cdd-csharp && make build_wasm && cd ..
-          fi
-
-          if should_run "cdd-go"; then
-          echo "==================================="
+          
           echo "Building WASM for cdd-go"
-          echo "==================================="
           cd cdd-go && make build_wasm && cd ..
-          fi
-
-          if should_run "cdd-php"; then
-          echo "==================================="
+          
           echo "Building WASM for cdd-php"
-          echo "==================================="
           cd cdd-php && make build_wasm && cd ..
-          fi
-
-          if should_run "cdd-python-client"; then
-          echo "==================================="
+          
           echo "Building WASM for cdd-python-client"
-          echo "==================================="
           cd cdd-python-client && make build_wasm && cd ..
-          fi
 
-          if should_run "cdd-ruby"; then
-          echo "==================================="
-          echo "Building WASM for cdd-ruby"
-          echo "==================================="
-          cd cdd-ruby && make build_wasm && cd ..
-          fi
-
+  verify-compliance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
       - name: Verify Compliance Dashboard
         run: |
           ./scripts/generate_dashboard.sh
@@ -582,3 +363,4 @@ jobs:
             echo "Error: ECOSYSTEM_COMPLIANCE_OAS_3_2_0.md is out of date. Please run ./scripts/generate_dashboard.sh and commit the changes."
             exit 1
           fi
+
