@@ -15,7 +15,7 @@ jobs:
         with:
           submodules: recursive
       - name: Setup Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 'lts/*'
           cache: 'npm'
@@ -29,7 +29,8 @@ jobs:
         run: |
           cd ../ts-morph
           npm i
-          npm run build
+          npm run build:node -w @ts-morph/common
+          npm run build:node -w ts-morph
           cd ../cdd-ts
           if [ -f package-lock.json ]; then
             npm ci
@@ -44,7 +45,7 @@ jobs:
               filename=$(basename "$file")
               echo "Testing $filename with cdd-ts..."
               node cdd-ts/dist/cli.js from_openapi to_sdk -i "$file" --output temp-ng
-              node cdd-ts/dist/cli.js to_openapi -i temp-ng/src --format yaml > temp-ng-spec.yaml
+              node cdd-ts/dist/cli.js to_openapi -i temp-ng --format yaml > temp-ng-spec.yaml
               rm -rf temp-ng temp-ng-spec.yaml
           done
 
@@ -56,13 +57,13 @@ jobs:
         with:
           submodules: recursive
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - name: Install Python deps
         run: pip install pyyaml
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: 'zulu'
           java-version: '21'
@@ -117,7 +118,7 @@ jobs:
         with:
           submodules: recursive
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - name: Install and run CDD Python Client Roundtrip Tests
@@ -149,7 +150,7 @@ jobs:
         with:
           swift-version: '6.0'
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - name: Install Python deps
@@ -177,7 +178,7 @@ jobs:
         with:
           submodules: recursive
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - name: Install Python deps
@@ -206,13 +207,13 @@ jobs:
         with:
           submodules: recursive
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: '1.25.x'
           cache-dependency-path: cdd-go/go.sum
           cache: true
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - name: Install Python deps
@@ -239,13 +240,13 @@ jobs:
         with:
           submodules: recursive
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: |
             8.0.x
             10.0.x
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - name: Install Python deps
@@ -274,9 +275,14 @@ jobs:
       - name: Run CDD C++ Tests
         run: |
           set -e
-          cd cdd-cpp && make install_base && make install_deps && make test && cd ..
+          sudo apt-get update && sudo apt-get install -y cmake build-essential libcurl4-openssl-dev
+          cd cdd-cpp
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build -j4
+          ./build/cdd-tests
+          cd ..
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - name: Install Python deps
@@ -290,8 +296,8 @@ jobs:
               echo "Testing $filename with cdd-cpp..."
               mkdir -p ../temp-cpp
               python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > ../temp-cpp-spec.json
-              ./bin/cdd-cpp from_openapi to_sdk -i ../temp-cpp-spec.json -o ../temp-cpp
-              ./bin/cdd-cpp to_openapi -i ../temp-cpp -o ../temp-cpp/spec.yaml
+              ./build/cdd-cpp from_openapi to_sdk -i ../temp-cpp-spec.json -o ../temp-cpp
+              ./build/cdd-cpp to_openapi -i ../temp-cpp -o ../temp-cpp/spec.yaml
               rm -rf ../temp-cpp ../temp-cpp-spec.json
           done
 
@@ -303,17 +309,17 @@ jobs:
         with:
           submodules: recursive
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: 'zulu'
           java-version: '21'
-          cache: 'gradle'
+          cache: 'maven'
       - name: Run CDD Java Tests
         run: |
           set -e
-          cd cdd-java && make install_base && make install_deps && make test && cd ..
+          cd cdd-java && make install_deps && mvn test && make build && cd ..
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - name: Install Python deps
@@ -326,8 +332,8 @@ jobs:
               echo "Testing file with cdd-java..."
               mkdir -p ../temp-java
               python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > ../temp-java-spec.json
-              ./gradlew run --args="from_openapi to_sdk -i ../temp-java-spec.json -o ../temp-java"
-              ./gradlew run --args="to_openapi -i ../temp-java -o ../temp-java/spec.yaml"
+              java -cp "lib/*:bin" cli.Main from_openapi to_sdk -i ../temp-java-spec.json -o ../temp-java
+              java -cp "lib/*:bin" cli.Main to_openapi -i ../temp-java -o ../temp-java/spec.yaml
               rm -rf ../temp-java ../temp-java-spec.json
           done
 
@@ -345,9 +351,9 @@ jobs:
       - name: Run CDD PHP Tests
         run: |
           set -e
-          cd cdd-php && make install_base && make install_deps && make test && cd ..
+          cd cdd-php && rm -f composer.lock && composer install --no-interaction && make test && cd ..
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - name: Install Python deps
@@ -373,7 +379,7 @@ jobs:
         with:
           submodules: recursive
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - name: Install Python deps
@@ -381,10 +387,12 @@ jobs:
       - name: Build and Run CDD C Roundtrip Tests
         run: |
           set -e
+          sudo apt-get update && sudo apt-get install -y gcc cmake pkg-config libcurl4-openssl-dev libssl-dev
           cd cdd-c
-          make install_base
           make install_deps
           make build
+          mkdir -p bin
+          cp -f build_cmake/cdd-c bin/cdd-c || true
           for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
               filename=$(basename "$file")
               echo "Testing $filename with cdd-c..."
@@ -406,9 +414,9 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
-          bundler-cache: true
+          bundler-cache: false
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - name: Install Python deps
@@ -417,6 +425,7 @@ jobs:
         run: |
           set -e
           cd cdd-ruby
+          sed -i "s/spec.license = 'MIT OR Apache-2.0'/spec.licenses = ['MIT', 'Apache-2.0']/" cdd-ruby.gemspec
           rm -f Gemfile.lock
           bundle install
           for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
@@ -424,8 +433,8 @@ jobs:
               echo "Testing $filename with cdd-ruby..."
               mkdir -p ../temp-rb
               python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > ../temp-rb-spec.json
-              ruby bin/cdd-ruby from_openapi to_sdk -i ../temp-rb-spec.json -o ../temp-rb
-              ruby bin/cdd-ruby to_openapi -i ../temp-rb -o ../temp-rb/spec.yaml
+              bundle exec ruby bin/cdd-ruby from_openapi to_sdk -i ../temp-rb-spec.json -o ../temp-rb
+              bundle exec ruby bin/cdd-ruby to_openapi -i ../temp-rb -o ../temp-rb/spec.yaml
               rm -rf ../temp-rb ../temp-rb-spec.json
           done
 
@@ -439,7 +448,10 @@ jobs:
       - name: Building WASM for cdd-c
         run: |
           set -e
-          cd cdd-c && make build_wasm && cd ..
+          cd cdd-c
+          sed -i 's/-DCMAKE_BUILD_TYPE=Release/-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS="-Wno-deprecated-declarations"/' Makefile
+          make build_wasm
+          cd ..
 
   wasm-build-cpp:
     runs-on: ubuntu-latest
@@ -449,7 +461,7 @@ jobs:
         with:
           submodules: recursive
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - name: Building WASM for cdd-cpp
@@ -465,7 +477,7 @@ jobs:
         with:
           submodules: recursive
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: |
             8.0.x
@@ -473,7 +485,7 @@ jobs:
       - name: Building WASM for cdd-csharp
         run: |
           set -e
-          dotnet workload install wasm-tools
+          sudo dotnet workload install wasm-tools wasm-tools-net8
           cd cdd-csharp && make build_wasm && cd ..
 
   wasm-build-go:
@@ -484,7 +496,7 @@ jobs:
         with:
           submodules: recursive
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: '1.25.x'
           cache-dependency-path: cdd-go/go.sum
@@ -502,7 +514,7 @@ jobs:
         with:
           submodules: recursive
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: 'zulu'
           java-version: '21'
@@ -528,7 +540,7 @@ jobs:
       - name: Building WASM for cdd-php
         run: |
           set -e
-          cd cdd-php && make build_wasm && cd ..
+          cd cdd-php && rm -f composer.lock && make build_wasm && cd ..
 
   wasm-build-python:
     runs-on: ubuntu-latest
@@ -538,7 +550,7 @@ jobs:
         with:
           submodules: recursive
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - name: Building WASM for cdd-python
@@ -558,11 +570,11 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
-          bundler-cache: true
+          bundler-cache: false
       - name: Building WASM for cdd-ruby
         run: |
           set -e
-          cd cdd-ruby && make build_wasm && cd ..
+          cd cdd-ruby && python3 scripts/build_wasm.py && cd ..
 
   wasm-build-sh:
     runs-on: ubuntu-latest

@@ -49,8 +49,41 @@ class DummySaboteurHandler(saboteur_server.SaboteurServer):
         self.headers_ended = True
 
 
-def test_saboteur_server_modes_and_methods() -> None:
-    """Verify `SaboteurServer` handles '500', 'invalid_schema', unknown mode, and all HTTP verbs."""
+def test_saboteur_server_modes_and_methods(tmp_path: pytest.TempPathFactory) -> None:
+    """Verify `SaboteurServer` handles 'happy_path', '500', 'invalid_schema', unknown mode, and all HTTP verbs."""
+    assert b"KtorIntegrationDog" in saboteur_server.build_petstore_payload("GET", "/v2/pet/findByStatus?status=sold")
+    assert b"available" in saboteur_server.build_petstore_payload("GET", "/v2/store/inventory")
+    assert b"placed" in saboteur_server.build_petstore_payload("GET", "/v2/store/order/1")
+    assert b"logged_in_session" in saboteur_server.build_petstore_payload("GET", "/v2/user/login")
+    assert b"user1" in saboteur_server.build_petstore_payload("GET", "/v2/user/user1")
+    assert b"KtorIntegrationDog" in saboteur_server.build_petstore_payload("GET", "/v2/pet/1")
+    assert b"unknown" in saboteur_server.build_petstore_payload("POST", "/v2/pet/1/uploadImage")
+
+    h_happy = DummySaboteurHandler("happy_path")
+    log_file = tmp_path / "access.log"  # type: ignore[operator]
+    h_happy.access_log_path = str(log_file)
+    h_happy.command = "POST"
+    h_happy.path = "/v2/pet"
+    h_happy.headers = {"Content-Length": "4"}  # type: ignore[assignment]
+    h_happy.rfile = io.BytesIO(b"{}\r\n")
+    h_happy.handle_request()
+    assert h_happy.status_codes == [200]
+    assert log_file.exists()
+
+    h_happy_no_log = DummySaboteurHandler("happy_path")
+    h_happy_no_log.access_log_path = None
+    h_happy_no_log.headers = {"Content-Length": "0"}  # type: ignore[assignment]
+    h_happy_no_log.rfile = io.BytesIO(b"")
+    h_happy_no_log.handle_request()
+    assert h_happy_no_log.status_codes == [200]
+
+    h_happy_empty_hdr = DummySaboteurHandler("happy_path")
+    h_happy_empty_hdr.access_log_path = None
+    h_happy_empty_hdr.headers = {}  # type: ignore[assignment]
+    h_happy_empty_hdr.rfile = io.BytesIO(b"")
+    h_happy_empty_hdr.handle_request()
+    assert h_happy_empty_hdr.status_codes == [200]
+
     h500 = DummySaboteurHandler("500")
     h500.do_GET()
     h500.do_POST()

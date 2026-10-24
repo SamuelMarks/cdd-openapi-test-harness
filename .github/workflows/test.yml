@@ -9,21 +9,13 @@ on:
 jobs:
   angular-integration:
     runs-on: ubuntu-latest
-    services:
-      petstore_server:
-        image: swaggerapi/petstore
-        ports:
-          - "8080:8080"
-        env:
-          SWAGGER_HOST: "http://localhost:8080"
-          SWAGGER_BASE_PATH: "/v2"
     steps:
       - name: Checkout repo and submodules
         uses: actions/checkout@v7
         with:
           submodules: recursive
       - name: Setup Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 'lts/*'
           cache: 'npm'
@@ -32,6 +24,12 @@ jobs:
         uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+      - name: Build ts-morph
+        run: |
+          cd ts-morph
+          npm i
+          npm run build:node -w @ts-morph/common
+          npm run build:node -w ts-morph
       - name: Run TypeScript Integration Tests
         run: |
           set -e
@@ -40,21 +38,13 @@ jobs:
 
   kotlin-integration:
     runs-on: ubuntu-latest
-    services:
-      petstore_server:
-        image: swaggerapi/petstore
-        ports:
-          - "8080:8080"
-        env:
-          SWAGGER_HOST: "http://localhost:8080"
-          SWAGGER_BASE_PATH: "/v2"
     steps:
       - name: Checkout repo and submodules
         uses: actions/checkout@v7
         with:
           submodules: recursive
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: 'zulu'
           java-version: '21'
@@ -69,21 +59,13 @@ jobs:
 
   go-tests:
     runs-on: ubuntu-latest
-    services:
-      petstore_server:
-        image: swaggerapi/petstore
-        ports:
-          - "8080:8080"
-        env:
-          SWAGGER_HOST: "http://localhost:8080"
-          SWAGGER_BASE_PATH: "/v2"
     steps:
       - name: Checkout repo and submodules
         uses: actions/checkout@v7
         with:
           submodules: recursive
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: '1.25.x'
           cache-dependency-path: cdd-go/go.sum
@@ -96,21 +78,13 @@ jobs:
 
   csharp-tests:
     runs-on: ubuntu-latest
-    services:
-      petstore_server:
-        image: swaggerapi/petstore
-        ports:
-          - "8080:8080"
-        env:
-          SWAGGER_HOST: "http://localhost:8080"
-          SWAGGER_BASE_PATH: "/v2"
     steps:
       - name: Checkout repo and submodules
         uses: actions/checkout@v7
         with:
           submodules: recursive
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: |
             8.0.x
@@ -123,14 +97,6 @@ jobs:
 
   sh-tests:
     runs-on: ubuntu-latest
-    services:
-      petstore_server:
-        image: swaggerapi/petstore
-        ports:
-          - "8080:8080"
-        env:
-          SWAGGER_HOST: "http://localhost:8080"
-          SWAGGER_BASE_PATH: "/v2"
     steps:
       - name: Checkout repo and submodules
         uses: actions/checkout@v7
@@ -139,7 +105,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq curl shellcheck
+          sudo apt-get install -y jq curl socat shellcheck
       - name: Run Shell Integration Tests
         run: |
           set -e
@@ -148,39 +114,25 @@ jobs:
 
   python-tests:
     runs-on: ubuntu-latest
-    services:
-      petstore_server:
-        image: swaggerapi/petstore
-        ports:
-          - "8080:8080"
-        env:
-          SWAGGER_HOST: "http://localhost:8080"
-          SWAGGER_BASE_PATH: "/v2"
     steps:
       - name: Checkout repo and submodules
         uses: actions/checkout@v7
         with:
           submodules: recursive
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - name: Run Python Integration Tests
         run: |
           set -e
+          pip install pyyaml uv
+          cd cdd-python-all && make install_deps && cd ..
           export ONLY_TEST=cdd-python-all
           python3 local_test.py only-test
 
   rust-tests:
     runs-on: ubuntu-latest
-    services:
-      petstore_server:
-        image: swaggerapi/petstore
-        ports:
-          - "8080:8080"
-        env:
-          SWAGGER_HOST: "http://localhost:8080"
-          SWAGGER_BASE_PATH: "/v2"
     steps:
       - name: Checkout repo and submodules
         uses: actions/checkout@v7
@@ -200,14 +152,6 @@ jobs:
 
   swift-tests:
     runs-on: ubuntu-latest
-    services:
-      petstore_server:
-        image: swaggerapi/petstore
-        ports:
-          - "8080:8080"
-        env:
-          SWAGGER_HOST: "http://localhost:8080"
-          SWAGGER_BASE_PATH: "/v2"
     steps:
       - name: Checkout repo and submodules
         uses: actions/checkout@v7
@@ -225,14 +169,6 @@ jobs:
 
   c-tests:
     runs-on: ubuntu-latest
-    services:
-      petstore_server:
-        image: swaggerapi/petstore
-        ports:
-          - "8080:8080"
-        env:
-          SWAGGER_HOST: "http://localhost:8080"
-          SWAGGER_BASE_PATH: "/v2"
     steps:
       - name: Checkout repo and submodules
         uses: actions/checkout@v7
@@ -241,20 +177,13 @@ jobs:
       - name: Run C Integration Tests
         run: |
           set -e
-          cd cdd-c && make install_base && make install_deps && cd ..
+          sudo apt-get update && sudo apt-get install -y gcc cmake pkg-config libcurl4-openssl-dev libssl-dev
+          cd cdd-c && make install_deps && cd ..
           export ONLY_TEST=cdd-c
           python3 local_test.py only-test
 
   cpp-tests:
     runs-on: ubuntu-latest
-    services:
-      petstore_server:
-        image: swaggerapi/petstore
-        ports:
-          - "8080:8080"
-        env:
-          SWAGGER_HOST: "http://localhost:8080"
-          SWAGGER_BASE_PATH: "/v2"
     steps:
       - name: Checkout repo and submodules
         uses: actions/checkout@v7
@@ -263,48 +192,32 @@ jobs:
       - name: Run C++ Integration Tests
         run: |
           set -e
-          cd cdd-cpp && make install_base && make install_deps && cd ..
+          sudo apt-get update && sudo apt-get install -y cmake build-essential libcurl4-openssl-dev
           export ONLY_TEST=cdd-cpp
           python3 local_test.py only-test
 
   java-tests:
     runs-on: ubuntu-latest
-    services:
-      petstore_server:
-        image: swaggerapi/petstore
-        ports:
-          - "8080:8080"
-        env:
-          SWAGGER_HOST: "http://localhost:8080"
-          SWAGGER_BASE_PATH: "/v2"
     steps:
       - name: Checkout repo and submodules
         uses: actions/checkout@v7
         with:
           submodules: recursive
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: 'zulu'
           java-version: '21'
-          cache: 'gradle'
+          cache: 'maven'
       - name: Run Java Integration Tests
         run: |
           set -e
-          cd cdd-java && make install_base && make install_deps && cd ..
+          cd cdd-java && make install_deps && cd ..
           export ONLY_TEST=cdd-java
           python3 local_test.py only-test
 
   php-tests:
     runs-on: ubuntu-latest
-    services:
-      petstore_server:
-        image: swaggerapi/petstore
-        ports:
-          - "8080:8080"
-        env:
-          SWAGGER_HOST: "http://localhost:8080"
-          SWAGGER_BASE_PATH: "/v2"
     steps:
       - name: Checkout repo and submodules
         uses: actions/checkout@v7
@@ -317,20 +230,12 @@ jobs:
       - name: Run PHP Integration Tests
         run: |
           set -e
-          cd cdd-php && make install_base && make install_deps && cd ..
+          cd cdd-php && rm -f composer.lock && composer install --no-interaction && cd ..
           export ONLY_TEST=cdd-php
           python3 local_test.py only-test
 
   ruby-tests:
     runs-on: ubuntu-latest
-    services:
-      petstore_server:
-        image: swaggerapi/petstore
-        ports:
-          - "8080:8080"
-        env:
-          SWAGGER_HOST: "http://localhost:8080"
-          SWAGGER_BASE_PATH: "/v2"
     steps:
       - name: Checkout repo and submodules
         uses: actions/checkout@v7
@@ -340,7 +245,7 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
-          bundler-cache: true
+          bundler-cache: false
       - name: Run Ruby Integration Tests
         run: |
           set -e

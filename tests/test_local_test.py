@@ -144,7 +144,9 @@ def test_start_petstore_and_emsdk_and_yaml(tmp_path: Path, monkeypatch: pytest.M
     monkeypatch.setattr(time, "sleep", lambda _: None)
 
     monkeypatch.setattr(shutil, "which", lambda _: None)
+    (tmp_path / "java_petstore_access.log").write_text("old", encoding="utf-8")
     local_test.start_petstore("/v2")
+    assert not (tmp_path / "java_petstore_access.log").exists()
 
     monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/docker")
     monkeypatch.setattr(
@@ -200,29 +202,6 @@ def test_run_test_with_audit_all_branches(tmp_path: Path, monkeypatch: pytest.Mo
     monkeypatch.setattr(time, "sleep", lambda _: None)
     monkeypatch.setattr(local_test, "start_petstore", lambda *a: None)
 
-    monkeypatch.setenv("ONLY_TEST", "cdd-other")
-    assert local_test.run_test_with_audit("cdd-ts", "petstore.json", "/v2", lambda: None) is True
-    monkeypatch.delenv("ONLY_TEST")
-
-    def fail_action() -> None:
-        """Raise RuntimeError."""
-        raise RuntimeError("boom")
-
-    assert local_test.run_test_with_audit("cdd-ts", "petstore.json", "/v2", fail_action) is False
-
-    (tmp_path / "java_petstore_access.log").write_text("GET /v2/pet", encoding="utf-8")
-
-    monkeypatch.setattr(
-        subprocess,
-        "run",
-        lambda cmd, **kw: subprocess.CompletedProcess(
-            cmd, 1 if "verify_coverage.py" in cmd else 0, stdout="cov out", stderr="cov err"
-        ),
-    )
-    assert local_test.run_test_with_audit("cdd-ts", "petstore.json", "/v2", lambda: None) is False
-
-    (tmp_path / "java_petstore_access.log").unlink()
-
     class FakePopen:
         """Mock Popen for saboteur server."""
 
@@ -239,6 +218,29 @@ def test_run_test_with_audit_all_branches(tmp_path: Path, monkeypatch: pytest.Mo
             return None
 
     monkeypatch.setattr(subprocess, "Popen", FakePopen)
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda cmd, **kw: subprocess.CompletedProcess(
+            cmd, 1 if "verify_coverage.py" in cmd else 0, stdout="cov out", stderr="cov err"
+        ),
+    )
+
+    monkeypatch.setenv("ONLY_TEST", "cdd-other")
+    assert local_test.run_test_with_audit("cdd-ts", "petstore.json", "/v2", lambda: None) is True
+    monkeypatch.delenv("ONLY_TEST")
+
+    def fail_action() -> None:
+        """Raise RuntimeError."""
+        raise RuntimeError("boom")
+
+    assert local_test.run_test_with_audit("cdd-ts", "petstore.json", "/v2", fail_action) is False
+
+    (tmp_path / "java_petstore_access.log").write_text("GET /v2/pet", encoding="utf-8")
+    assert local_test.run_test_with_audit("cdd-ts", "petstore.json", "/v2", lambda: None) is False
+
+    (tmp_path / "java_petstore_access.log").unlink()
+
     monkeypatch.setattr(
         subprocess,
         "run",
@@ -266,6 +268,70 @@ def test_run_test_with_audit_all_branches(tmp_path: Path, monkeypatch: pytest.Mo
             raise RuntimeError("saboteur caught")
 
     assert local_test.run_test_with_audit("cdd-ts", "petstore.json", "/v2", pass_once_then_fail_on_saboteur) is True
+
+
+def test_exercise_sdk_endpoints_all_branches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify `exercise_sdk_endpoints` across missing file, invalid shapes, success, HTTP error, and sabotage."""
+    import io
+    import urllib.error
+    import urllib.request
+
+    monkeypatch.chdir(tmp_path)
+    local_test.exercise_sdk_endpoints("nonexistent.json")
+
+    (tmp_path / "list.json").write_text("[1, 2]", encoding="utf-8")
+    local_test.exercise_sdk_endpoints("list.json")
+
+    (tmp_path / "bad_paths.json").write_text('{"paths": []}', encoding="utf-8")
+    local_test.exercise_sdk_endpoints("bad_paths.json")
+
+    spec_file = tmp_path / "petstore_oas3.json"
+    spec_file.write_text(
+        '{"paths": {"/bad": "str", "/pet/{id}": {"parameters": [], "get": {}, "post": {}}}}',
+        encoding="utf-8",
+    )
+
+    class FakeResp:
+        """Mock urllib response."""
+
+        def __init__(self, status: int, body: bytes) -> None:
+            """Initialize FakeResp."""
+            self.status = status
+            self.body = body
+
+        def read(self) -> bytes:
+            """Return response bytes."""
+            return self.body
+
+        def __enter__(self) -> "FakeResp":
+            """Enter context manager."""
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            """Exit context manager."""
+            return None
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=5: FakeResp(200, b'{"id": 1}'))
+    local_test.exercise_sdk_endpoints("petstore_oas3.json")
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=5: FakeResp(204, b""))
+    local_test.exercise_sdk_endpoints("petstore_oas3.json")
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=5: FakeResp(500, b"{}"))
+    with pytest.raises(RuntimeError, match="Unexpected status 500"):
+        local_test.exercise_sdk_endpoints("petstore_oas3.json")
+
+    def raise_http_err(req: object, timeout: int = 5) -> FakeResp:
+        """Raise HTTPError."""
+        raise urllib.error.HTTPError("http://localhost", 500, "Internal", None, io.BytesIO(b""))  # type: ignore[arg-type]
+
+    monkeypatch.setattr(urllib.request, "urlopen", raise_http_err)
+    with pytest.raises(RuntimeError, match="HTTP error 500"):
+        local_test.exercise_sdk_endpoints("petstore_oas3.json")
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=5: FakeResp(200, b'{"sabotage": true}'))
+    with pytest.raises(RuntimeError, match="Invalid schema"):
+        local_test.exercise_sdk_endpoints("petstore_oas3.json")
 
 
 def test_individual_toolchain_runners(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -330,36 +396,80 @@ def test_individual_toolchain_runners(tmp_path: Path, monkeypatch: pytest.Monkey
     local_test.test_cdd_kotlin("petstore.json")
 
     local_test.test_cdd_go("petstore.json")
+
+    def fake_run_cmd_go(cmd: Sequence[str], **kw: object) -> subprocess.CompletedProcess[str]:
+        """Create models/components.go in cdd-go-client."""
+        go_models = tmp_path / "cdd-go-client" / "models"
+        go_models.mkdir(parents=True, exist_ok=True)
+        if "from_openapi" in cmd:
+            (go_models / "components.go").write_text("package models\nvar X OAuthFlows\n", encoding="utf-8")
+        return subprocess.CompletedProcess(list(cmd), 0, stdout="", stderr="")
+
+    monkeypatch.setattr(local_test, "run_cmd", fake_run_cmd_go)
+    local_test.test_cdd_go("petstore.json")
+
+    def fake_run_cmd_go_already(cmd: Sequence[str], **kw: object) -> subprocess.CompletedProcess[str]:
+        """Create models/components.go with type OAuthFlows already present."""
+        go_models = tmp_path / "cdd-go-client" / "models"
+        go_models.mkdir(parents=True, exist_ok=True)
+        if "from_openapi" in cmd:
+            (go_models / "components.go").write_text("package models\ntype OAuthFlows struct{}\n", encoding="utf-8")
+        return subprocess.CompletedProcess(list(cmd), 0, stdout="", stderr="")
+
+    monkeypatch.setattr(local_test, "run_cmd", fake_run_cmd_go_already)
+    local_test.test_cdd_go("petstore.json")
+    monkeypatch.setattr(local_test, "run_cmd", fake_run_cmd)
+
     local_test.test_cdd_csharp("petstore.json")
     local_test.test_cdd_python_all("petstore.json")
+
+    def fake_run_cmd_py(cmd: Sequence[str], **kw: object) -> subprocess.CompletedProcess[str]:
+        """Create test/test_api.py in cdd-python-client."""
+        py_test_dir = tmp_path / "cdd-python-client" / "test"
+        py_test_dir.mkdir(parents=True, exist_ok=True)
+        (py_test_dir / "test_api.py").write_text("test_operations = [1]\n", encoding="utf-8")
+        return subprocess.CompletedProcess(list(cmd), 0, stdout="", stderr="")
+
+    monkeypatch.setattr(local_test, "run_cmd", fake_run_cmd_py)
+    local_test.test_cdd_python_all("petstore.json")
+    monkeypatch.setattr(local_test, "run_cmd", fake_run_cmd)
+
     local_test.test_cdd_rust("petstore.json")
     local_test.test_cdd_swift("petstore.json")
+    local_test.test_cdd_c("petstore.json")
+    (tmp_path / "cdd-c" / "build_cmake").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "cdd-c" / "build_cmake" / "cdd-c").write_text("bin", encoding="utf-8")
     local_test.test_cdd_c("petstore.json")
     local_test.test_cdd_cpp("petstore.json")
     local_test.test_cdd_java("petstore.json")
     local_test.test_cdd_php("petstore.json")
 
-    (tmp_path / "cdd-ruby" / "Gemfile.lock").write_text("lock", encoding="utf-8")
+    (tmp_path / "cdd-php" / "composer.lock").write_text("lock", encoding="utf-8")
+
+    def fake_run_cmd_php(cmd: Sequence[str], **kw: object) -> subprocess.CompletedProcess[str]:
+        """Create composer.lock and tests/ApiTests.php in php-client."""
+        php_dir = tmp_path / "php-client"
+        (php_dir / "tests").mkdir(parents=True, exist_ok=True)
+        if "from_openapi" in cmd:
+            (php_dir / "composer.lock").write_text("lock", encoding="utf-8")
+            (php_dir / "tests" / "ApiTests.php").write_text("<?php", encoding="utf-8")
+        return subprocess.CompletedProcess(list(cmd), 0, stdout="", stderr="")
+
+    monkeypatch.setattr(local_test, "run_cmd", fake_run_cmd_php)
+    local_test.test_cdd_php("petstore.json")
+    monkeypatch.setattr(local_test, "run_cmd", fake_run_cmd)
 
     def fake_run_cmd_ruby(cmd: Sequence[str], **kw: object) -> subprocess.CompletedProcess[str]:
-        """Ensure cdd-ruby-client has a Gemfile.lock to exercise removal branch."""
+        """Ensure cdd-ruby-client exists."""
         c_dir = tmp_path / "cdd-ruby-client"
         c_dir.mkdir(exist_ok=True)
-        if "from_openapi" in cmd:
-            (c_dir / "Gemfile.lock").write_text("lock", encoding="utf-8")
         return subprocess.CompletedProcess(list(cmd), 0, stdout="", stderr="")
 
     monkeypatch.setattr(local_test, "run_cmd", fake_run_cmd_ruby)
     local_test.test_cdd_ruby("petstore.json")
+    (tmp_path / "cdd-ruby" / "Gemfile.lock").write_text("lock", encoding="utf-8")
+    (tmp_path / "cdd-ruby" / "cdd-ruby.gemspec").write_text("spec.license = 'MIT OR Apache-2.0'\n", encoding="utf-8")
     local_test.test_cdd_ruby("petstore.json")
-
-    def fake_run_cmd_ruby_no_lock(cmd: Sequence[str], **kw: object) -> subprocess.CompletedProcess[str]:
-        """Ensure cdd-ruby-client exists without Gemfile.lock."""
-        c_dir = tmp_path / "cdd-ruby-client"
-        c_dir.mkdir(exist_ok=True)
-        return subprocess.CompletedProcess(list(cmd), 0, stdout="", stderr="")
-
-    monkeypatch.setattr(local_test, "run_cmd", fake_run_cmd_ruby_no_lock)
     local_test.test_cdd_ruby("petstore.json")
 
     monkeypatch.setattr(local_test, "run_cmd", fake_run_cmd)

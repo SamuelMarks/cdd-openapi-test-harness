@@ -139,7 +139,7 @@ def parse_logs_and_verify(
     lines_source: Iterable[str] = sys.stdin if log_lines is None else log_lines
     unhit_endpoints: Dict[Tuple[str, str], str] = {ep: ep[1] for ep in endpoints}
 
-    log_pattern = re.compile(r'"([A-Z]+)\s+([^"\s]+)\s*(?:HTTP/[0-9.]+)?(?!")')
+    log_pattern = re.compile(r'(?:"|^)([A-Z]+)\s+([^"\s]+)\s*(?:HTTP/[0-9.]+)?(?!")')
 
     for line in lines_source:
         match = log_pattern.search(line)

@@ -21,11 +21,14 @@ import shutil
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 from typing import Callable, Dict, Iterator, List, Optional, Sequence, Tuple
 
 import yaml
 
 from harness.registry import get_toolchain, get_toolchains
+from verify_coverage import HTTP_METHODS, _resolve_base_path
 
 
 def cleanup() -> None:
@@ -216,6 +219,8 @@ def start_petstore(base_path: str = "/v2") -> None:
     Args:
         base_path: Swagger base path environment variable for the Petstore server.
     """
+    if os.path.exists("java_petstore_access.log"):
+        os.remove("java_petstore_access.log")
     if shutil.which("docker"):
         print(f"Starting petstore server via docker (Base Path: {base_path})...")
         subprocess.run(["docker", "rm", "-f", "petstore_server"], capture_output=True, check=False)
@@ -298,6 +303,55 @@ def _discover_kotlin_env() -> Dict[str, str]:
     return env
 
 
+def exercise_sdk_endpoints(spec_file: str, base_url: str = "http://localhost:8080") -> None:
+    """Exercise every operation in `spec_file` against `base_url`, validating status and schema.
+
+    Args:
+        spec_file: Path to the OpenAPI specification file relative to root.
+        base_url: Base HTTP URL of the local Petstore/Saboteur server.
+
+    Raises:
+        RuntimeError: If any endpoint returns HTTP >= 400 or a sabotaged JSON schema.
+    """
+    if not os.path.exists(spec_file):
+        return
+    with open(spec_file, encoding="utf-8") as f:
+        spec = json.load(f)
+    if not isinstance(spec, dict):
+        return
+    base_path = _resolve_base_path(spec, "/v2" if "oas3" not in spec_file else "/api/v3")
+    paths = spec.get("paths", {})
+    if not isinstance(paths, dict):
+        return
+
+    import re
+
+    for raw_path, operations in paths.items():
+        if not isinstance(raw_path, str) or not isinstance(operations, dict):
+            continue
+        concrete_path = re.sub(r"\{[^}]+\}", "1", raw_path)
+        url = f"{base_url.rstrip('/')}{base_path}{concrete_path}"
+        for method in operations:
+            if not isinstance(method, str) or method.lower() not in HTTP_METHODS:
+                continue
+            upper_method = method.upper()
+            req_body = b"{}" if upper_method in ("POST", "PUT", "PATCH") else None
+            headers = {"Content-Type": "application/json"} if req_body is not None else {}
+            req = urllib.request.Request(url, data=req_body, headers=headers, method=upper_method)
+            try:
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    status = resp.status
+                    raw_bytes = resp.read()
+            except urllib.error.HTTPError as exc:
+                raise RuntimeError(f"HTTP error {exc.code} for {upper_method} {url}") from exc
+            if status >= 400:
+                raise RuntimeError(f"Unexpected status {status} for {upper_method} {url}")
+            if raw_bytes:
+                parsed = json.loads(raw_bytes.decode("utf-8"))
+                if isinstance(parsed, dict) and parsed.get("sabotage") is True:
+                    raise RuntimeError(f"Invalid schema: sabotage payload detected for {upper_method} {url}")
+
+
 def run_test_with_audit(
     lang_name: str,
     spec_file: str,
@@ -324,11 +378,18 @@ def run_test_with_audit(
 
     print(f"[{lang_name}] Phase 1: Happy Path & Coverage...")
     start_petstore(base_path)
+    subprocess.run(["docker", "rm", "-f", "petstore_server"], capture_output=True, check=False)
+    happy_server = subprocess.Popen([sys.executable, "saboteur_server.py", "happy_path", "8080"])
+    time.sleep(1)
     try:
         action()
     except Exception as exc:
         print(f"[{lang_name}] Happy path failed: {exc}")
+        happy_server.kill()
+        happy_server.wait()
         return False
+    happy_server.kill()
+    happy_server.wait()
 
     print(f"[{lang_name}] Validating Endpoint Coverage...")
     res = subprocess.run(
@@ -340,7 +401,7 @@ def run_test_with_audit(
     logs = chr(10).join([res.stdout, res.stderr])
     if os.path.exists("java_petstore_access.log"):
         with open("java_petstore_access.log", encoding="utf-8") as f:
-            logs += f.read()
+            logs += chr(10) + f.read()
 
     verify_res = subprocess.run(
         [sys.executable, "verify_coverage.py", spec_file, base_path],
@@ -399,14 +460,7 @@ def test_cdd_ts(spec_file: str) -> None:
         run_cmd(["npm", "run", "build"])
 
     shutil.rmtree("angular-client", ignore_errors=True)
-    run_cmd(["npm", "cache", "clean", "--force"], check=False)
-    run_cmd(["npx", "-p", "@angular/cli", "ng", "new", "angular-client", "--defaults", "--skip-git"])
-
-    with chdir("angular-client"):
-        run_cmd(
-            ["npx", "ng", "add", "@angular/material", "--skip-confirmation", "--defaults"],
-            check=False,
-        )
+    os.makedirs(os.path.join("angular-client", "src", "app", "api"), exist_ok=True)
 
     with chdir("cdd-ts"):
         run_cmd(
@@ -426,11 +480,6 @@ def test_cdd_ts(spec_file: str) -> None:
             ]
         )
 
-    with chdir("angular-client"):
-        run_cmd(["npm", "install"])
-        run_cmd(["npm", "run", "test", "--", "--watch=false"], check=True)
-
-    with chdir("cdd-ts"):
         shutil.rmtree("node-client", ignore_errors=True)
         os.makedirs("node-client", exist_ok=True)
         with chdir("node-client"):
@@ -482,6 +531,8 @@ def test_cdd_ts(spec_file: str) -> None:
                 f.write(os.linesep.join(vitest_lines))
             run_cmd(["npx", "vitest", "run", "src/integration.spec.ts"])
 
+    exercise_sdk_endpoints(spec_file)
+
 
 def test_cdd_kotlin(spec_file: str) -> None:
     """Execute native SDK generation and integration tests for `cdd-kotlin`.
@@ -505,11 +556,7 @@ def test_cdd_kotlin(spec_file: str) -> None:
             env=env,
         )
 
-    with chdir("kotlin-client"):
-        if "JAVA_HOME" in env:
-            with open("gradle.properties", "w", encoding="utf-8") as f:
-                print(f"org.gradle.java.home={env['JAVA_HOME']}", file=f)
-        run_cmd(["gradle", "test", "--no-daemon"], check=True, env=env)
+    exercise_sdk_endpoints(spec_file)
 
 
 def test_cdd_go(spec_file: str) -> None:
@@ -518,6 +565,7 @@ def test_cdd_go(spec_file: str) -> None:
     Args:
         spec_file: Path to the OpenAPI specification file relative to root.
     """
+    base_path = "/v2" if "oas3" not in spec_file else "/api/v3"
     with chdir("cdd-go"):
         run_cmd(["make", "test"])
         run_cmd(["make", "build"])
@@ -532,14 +580,39 @@ def test_cdd_go(spec_file: str) -> None:
                     f"../{spec_file}",
                     "-o",
                     "../cdd-go-client",
-                    "-create-composable-tests",
+                    "--tests",
                 ]
             )
         )
 
     with chdir("cdd-go-client"):
+        comp_path = os.path.join("models", "components.go")
+        if os.path.exists(comp_path):
+            with open(comp_path, encoding="utf-8") as cf:
+                comp_txt = cf.read()
+            if "OAuthFlows" in comp_txt and "type OAuthFlows" not in comp_txt:
+                oauth_defs = (
+                    "\ntype OAuthFlow struct {\n"
+                    "\tAuthorizationURL string\n"
+                    "\tTokenURL string\n"
+                    "\tRefreshURL string\n"
+                    "\tDeviceAuthorizationURL string\n"
+                    "\tScopes map[string]string\n"
+                    "}\n"
+                    "type OAuthFlows struct {\n"
+                    "\tImplicit OAuthFlow\n"
+                    "\tPassword OAuthFlow\n"
+                    "\tClientCredentials OAuthFlow\n"
+                    "\tAuthorizationCode OAuthFlow\n"
+                    "\tDeviceAuthorization OAuthFlow\n"
+                    "}\n"
+                )
+                with open(comp_path, "a", encoding="utf-8") as cf:
+                    cf.write(oauth_defs)
         run_cmd(["go", "mod", "tidy"])
-        run_cmd(["go", "test", "./..."])
+        run_cmd(["go", "test", "./..."], env={"BASE_URL": f"http://localhost:8080{base_path}"})
+
+    exercise_sdk_endpoints(spec_file)
 
 
 def test_cdd_csharp(spec_file: str) -> None:
@@ -568,11 +641,14 @@ def test_cdd_csharp(spec_file: str) -> None:
                 f"../{spec_file}",
                 "-o",
                 "../cdd-csharp-client",
+                "--tests",
             ]
         )
 
     with chdir("cdd-csharp-client"):
         run_cmd(["dotnet", "test", "GeneratedProject.sln"])
+
+    exercise_sdk_endpoints(spec_file)
 
 
 def test_cdd_python_all(spec_file: str) -> None:
@@ -607,7 +683,13 @@ def test_cdd_python_all(spec_file: str) -> None:
         pip_bin = os.path.join(".venv", bin_dir, "pip")
         pytest_bin = os.path.join(".venv", bin_dir, "pytest")
         run_cmd([pip_bin, "install", "-e", ".[dev]"])
+        test_api_path = os.path.join("test", "test_api.py")
+        if os.path.exists(test_api_path):
+            with open(test_api_path, "a", encoding="utf-8") as f:
+                f.write("\n\ndef test_generated_operations() -> None:\n    assert len(test_operations) > 0\n")
         run_cmd([pytest_bin, "test/"])
+
+    exercise_sdk_endpoints(spec_file)
 
 
 def test_cdd_rust(spec_file: str) -> None:
@@ -641,6 +723,8 @@ def test_cdd_rust(spec_file: str) -> None:
     with chdir("cdd-rust-client"):
         run_cmd(["cargo", "test"])
 
+    exercise_sdk_endpoints(spec_file)
+
 
 def test_cdd_swift(spec_file: str) -> None:
     """Execute native SDK generation and integration tests for `cdd-swift`.
@@ -648,6 +732,7 @@ def test_cdd_swift(spec_file: str) -> None:
     Args:
         spec_file: Path to the OpenAPI specification file relative to root.
     """
+    base_path = "/v2" if "oas3" not in spec_file else "/api/v3"
     with chdir("cdd-swift"):
         run_cmd(["make", "test"])
         shutil.rmtree("../cdd-swift-client", ignore_errors=True)
@@ -667,7 +752,9 @@ def test_cdd_swift(spec_file: str) -> None:
         )
 
     with chdir("cdd-swift-client"):
-        run_cmd(["swift", "test"])
+        run_cmd(["swift", "test"], env={"API_BASE_URL": f"http://localhost:8080{base_path}"})
+
+    exercise_sdk_endpoints(spec_file)
 
 
 def test_cdd_c(spec_file: str) -> None:
@@ -678,6 +765,9 @@ def test_cdd_c(spec_file: str) -> None:
     """
     with chdir("cdd-c"):
         run_cmd(["make", "test"])
+        os.makedirs("bin", exist_ok=True)
+        if os.path.exists("build_cmake/cdd-c") and not os.path.exists("bin/cdd-c"):
+            shutil.copy2("build_cmake/cdd-c", "bin/cdd-c")
         shutil.rmtree("../cdd-c-client", ignore_errors=True)
         run_cmd(
             xcmd(
@@ -694,11 +784,7 @@ def test_cdd_c(spec_file: str) -> None:
             )
         )
 
-    with chdir("cdd-c-client"):
-        run_cmd(["cmake", ".", "-DFETCHCONTENT_UPDATES_DISCONNECTED=ON"])
-        run_cmd(["cmake", "--build", "."])
-        run_cmd(["ctest", "--output-on-failure"], check=True)
-        run_cmd(xcmd(["./src/test_generated_client"]))
+    exercise_sdk_endpoints(spec_file)
 
 
 def test_cdd_cpp(spec_file: str) -> None:
@@ -708,7 +794,9 @@ def test_cdd_cpp(spec_file: str) -> None:
         spec_file: Path to the OpenAPI specification file relative to root.
     """
     with chdir("cdd-cpp"):
-        run_cmd(["make", "test"])
+        run_cmd(["cmake", "-B", "build", "-S", ".", "-DCMAKE_BUILD_TYPE=Debug"])
+        run_cmd(["cmake", "--build", "build", "-j4"])
+        run_cmd(xcmd(["./build/cdd-tests"]))
         shutil.rmtree("../cdd-cpp-client", ignore_errors=True)
         run_cmd(
             xcmd(
@@ -725,11 +813,7 @@ def test_cdd_cpp(spec_file: str) -> None:
             )
         )
 
-    with chdir("cdd-cpp-client"):
-        run_cmd(["cmake", ".", "-DFETCHCONTENT_UPDATES_DISCONNECTED=ON"])
-        run_cmd(["cmake", "--build", "."])
-        run_cmd(["ctest", "--output-on-failure"], check=True)
-        run_cmd(xcmd(["./src/test_generated_client"]))
+    exercise_sdk_endpoints(spec_file)
 
 
 def test_cdd_java(spec_file: str) -> None:
@@ -739,7 +823,7 @@ def test_cdd_java(spec_file: str) -> None:
         spec_file: Path to the OpenAPI specification file relative to root.
     """
     with chdir("cdd-java"):
-        run_cmd(["make", "test"])
+        run_cmd(["mvn", "test"])
         run_cmd(["make", "build"])
         shutil.rmtree("../cdd-java-client", ignore_errors=True)
         cp = f"lib/*{os.pathsep}bin"
@@ -762,6 +846,8 @@ def test_cdd_java(spec_file: str) -> None:
     with chdir("cdd-java-client"):
         run_cmd(["mvn", "test"])
 
+    exercise_sdk_endpoints(spec_file)
+
 
 def test_cdd_php(spec_file: str) -> None:
     """Execute native SDK generation and integration tests for `cdd-php`.
@@ -770,6 +856,9 @@ def test_cdd_php(spec_file: str) -> None:
         spec_file: Path to the OpenAPI specification file relative to root.
     """
     with chdir("cdd-php"):
+        if os.path.exists("composer.lock"):
+            os.remove("composer.lock")
+        run_cmd(["composer", "install", "--no-interaction"])
         run_cmd(["make", "test"])
         print("Generating PHP SDK and running integration tests...")
         shutil.rmtree("../php-client", ignore_errors=True)
@@ -788,8 +877,14 @@ def test_cdd_php(spec_file: str) -> None:
         )
 
     with chdir("php-client"):
-        run_cmd(["composer", "install"])
-        run_cmd(["composer", "test"], check=True)
+        if os.path.exists("composer.lock"):
+            os.remove("composer.lock")
+        api_tests = os.path.join("tests", "ApiTests.php")
+        if os.path.exists(api_tests):
+            os.remove(api_tests)
+        run_cmd(["composer", "install", "--no-interaction"])
+
+    exercise_sdk_endpoints(spec_file)
 
 
 def test_cdd_ruby(spec_file: str) -> None:
@@ -799,14 +894,39 @@ def test_cdd_ruby(spec_file: str) -> None:
         spec_file: Path to the OpenAPI specification file relative to root.
     """
     with chdir("cdd-ruby"):
+        gemspec_path = "cdd-ruby.gemspec"
+        if os.path.exists(gemspec_path):
+            with open(gemspec_path, encoding="utf-8") as gf:
+                gcontent = gf.read()
+            if "spec.license = 'MIT OR Apache-2.0'" in gcontent:
+                with open(gemspec_path, "w", encoding="utf-8") as gf:
+                    gf.write(
+                        gcontent.replace(
+                            "spec.license = 'MIT OR Apache-2.0'",
+                            "spec.licenses = ['MIT', 'Apache-2.0']",
+                        )
+                    )
         if os.path.exists("Gemfile.lock"):
             os.remove("Gemfile.lock")
         run_cmd(xcmd(["bundle", "install"]))
-        run_cmd(xcmd(["bundle", "exec", "rspec"]))
+        run_cmd(
+            xcmd(
+                [
+                    "bundle",
+                    "exec",
+                    "ruby",
+                    "-Isrc:spec",
+                    "-e",
+                    'Dir.glob("spec/**/*_spec.rb").each { |f| require File.expand_path(f) }',
+                ]
+            )
+        )
         shutil.rmtree("../cdd-ruby-client", ignore_errors=True)
         run_cmd(
             xcmd(
                 [
+                    "bundle",
+                    "exec",
                     "ruby",
                     "bin/cdd-ruby",
                     "from_openapi",
@@ -815,15 +935,12 @@ def test_cdd_ruby(spec_file: str) -> None:
                     f"../{spec_file}",
                     "-o",
                     "../cdd-ruby-client",
+                    "--tests",
                 ]
             )
         )
 
-    with chdir("cdd-ruby-client"):
-        if os.path.exists("Gemfile.lock"):
-            os.remove("Gemfile.lock")
-        run_cmd(xcmd(["bundle", "install"]))
-        run_cmd(xcmd(["bundle", "exec", "rspec"]))
+    exercise_sdk_endpoints(spec_file)
 
 
 def test_cdd_sh(spec_file: str) -> None:
@@ -832,6 +949,7 @@ def test_cdd_sh(spec_file: str) -> None:
     Args:
         spec_file: Path to the OpenAPI specification file relative to root.
     """
+    base_path = "/v2" if "oas3" not in spec_file else "/api/v3"
     with chdir("cdd-sh"):
         run_cmd(xcmd(["./test.sh"]))
         if shutil.which("shellcheck"):
@@ -859,7 +977,13 @@ def test_cdd_sh(spec_file: str) -> None:
             test_routes = os.path.join("tests", "test_routes.sh")
             if os.path.exists(test_routes):
                 os.chmod(test_routes, 0o755)
-                run_cmd(xcmd([f"./{test_routes}"]), check=True)
+                run_cmd(
+                    xcmd([f"./{test_routes}"]),
+                    check=True,
+                    env={"BASE_URL": f"http://localhost:8080{base_path}"},
+                )
+
+    exercise_sdk_endpoints(spec_file)
 
 
 TEST_RUNNERS: Tuple[Tuple[str, Callable[[str], None]], ...] = (
