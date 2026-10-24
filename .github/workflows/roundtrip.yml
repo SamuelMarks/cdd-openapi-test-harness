@@ -24,6 +24,12 @@ jobs:
         uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - name: Install Python deps
+        run: pip install pyyaml
       - name: Install dependencies and build cdd-ts
         working-directory: cdd-ts
         run: |
@@ -44,9 +50,10 @@ jobs:
           for file in OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
               filename=$(basename "$file")
               echo "Testing $filename with cdd-ts..."
-              node cdd-ts/dist/cli.js from_openapi to_sdk -i "$file" --output temp-ng
-              node cdd-ts/dist/cli.js to_openapi -i temp-ng --format yaml > temp-ng-spec.yaml
-              rm -rf temp-ng temp-ng-spec.yaml
+              python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-ng-in.json
+              node cdd-ts/dist/cli.js from_openapi to_sdk -i temp-ng-in.json -o temp-ng
+              node cdd-ts/dist/cli.js to_openapi -i temp-ng -o temp-ng-spec.json
+              rm -rf temp-ng temp-ng-in.json temp-ng-spec.json
           done
 
   roundtrip-kotlin:
@@ -222,12 +229,13 @@ jobs:
         run: |
           set -e
           cd cdd-go
+          go build -o cdd-go ./cmd/cdd-go
           for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
               filename=$(basename "$file")
               echo "Testing $filename with cdd-go..."
               python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-go-spec.json
-              go run ./cmd/cdd_go from_openapi -i temp-go-spec.json -o temp-go
-              go run ./cmd/cdd_go to_openapi -i temp-go -o temp-go-out.json
+              ./cdd-go from_openapi to_sdk -i temp-go-spec.json -o temp-go
+              ./cdd-go to_openapi -i temp-go -o temp-go-out.json
               rm -rf temp-go-spec.json temp-go temp-go-out.json
           done
           cd ..
@@ -255,12 +263,13 @@ jobs:
         run: |
           set -e
           cd cdd-csharp
+          dotnet build -f net10.0 src/Cdd.OpenApi.Cli/Cdd.OpenApi.Cli.csproj
           for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
               filename=$(basename "$file")
               echo "Testing $filename with cdd-csharp..."
               python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-cs-spec.json
-              dotnet run --project src/Cdd.OpenApi.Cli -- from_openapi -i temp-cs-spec.json -o temp-cs
-              dotnet run --project src/Cdd.OpenApi.Cli -- to_openapi -i temp-cs -o temp-cs-out.json
+              dotnet run --framework net10.0 --no-build --project src/Cdd.OpenApi.Cli -- from_openapi to_sdk -i temp-cs-spec.json -o temp-cs
+              dotnet run --framework net10.0 --no-build --project src/Cdd.OpenApi.Cli -- to_openapi -i temp-cs -o temp-cs-out.json
               rm -rf temp-cs-spec.json temp-cs temp-cs-out.json
           done
           cd ..
@@ -277,7 +286,7 @@ jobs:
           set -e
           sudo apt-get update && sudo apt-get install -y cmake build-essential libcurl4-openssl-dev
           cd cdd-cpp
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="-Wno-unused-result"
           cmake --build build -j4
           ./build/cdd-tests
           cd ..
@@ -426,6 +435,7 @@ jobs:
           set -e
           cd cdd-ruby
           sed -i "s/spec.license = 'MIT OR Apache-2.0'/spec.licenses = ['MIT', 'Apache-2.0']/" cdd-ruby.gemspec
+          sed -i "s/gem 'minitest', '~> 6.0'/gem 'minitest', '>= 5.0'/" Gemfile
           rm -f Gemfile.lock
           bundle install
           for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
@@ -449,6 +459,8 @@ jobs:
         run: |
           set -e
           cd cdd-c
+          sed -i 's/extern cdd_c_error_t serve_json_rpc_main/extern C_CDD_EXPORT cdd_c_error_t serve_json_rpc_main/g' src/functions/parse/main.c
+          sed -i 's/extern cdd_c_error_t serve_mcp_stdio_main/extern C_CDD_EXPORT cdd_c_error_t serve_mcp_stdio_main/g' src/functions/parse/main.c
           sed -i 's/-DCMAKE_BUILD_TYPE=Release/-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS="-Wno-deprecated-declarations"/' Makefile
           make build_wasm
           cd ..
@@ -486,7 +498,10 @@ jobs:
         run: |
           set -e
           sudo dotnet workload install wasm-tools wasm-tools-net8
-          cd cdd-csharp && make build_wasm && cd ..
+          cd cdd-csharp
+          sed -i '/HttpSpecServer/i #pragma warning disable CA1416' src/Cdd.OpenApi.Cli/CddCli.cs src/Cdd.OpenApi.Cli/Program.cs
+          make build_wasm
+          cd ..
 
   wasm-build-go:
     runs-on: ubuntu-latest

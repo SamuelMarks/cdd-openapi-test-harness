@@ -390,6 +390,18 @@ def test_individual_toolchain_runners(tmp_path: Path, monkeypatch: pytest.Monkey
 
     local_test.test_cdd_ts("petstore.json")
 
+    def fake_run_cmd_ts_with_spec(cmd: Sequence[str], **kw: object) -> subprocess.CompletedProcess[str]:
+        """Create node-client/src/integration.spec.ts when cdd-ts generates node SDK."""
+        if "node-client" in cmd:
+            spec_dir = tmp_path / "cdd-ts" / "node-client" / "src"
+            spec_dir.mkdir(parents=True, exist_ok=True)
+            (spec_dir / "integration.spec.ts").write_text("import {} from 'vitest';\n", encoding="utf-8")
+        return subprocess.CompletedProcess(list(cmd), 0, stdout="", stderr="")
+
+    monkeypatch.setattr(local_test, "run_cmd", fake_run_cmd_ts_with_spec)
+    local_test.test_cdd_ts("petstore.json")
+    monkeypatch.setattr(local_test, "run_cmd", fake_run_cmd)
+
     monkeypatch.setenv("JAVA_HOME", "/tmp/jdk")
     local_test.test_cdd_kotlin("petstore.json")
     monkeypatch.delenv("JAVA_HOME")
@@ -424,10 +436,11 @@ def test_individual_toolchain_runners(tmp_path: Path, monkeypatch: pytest.Monkey
     local_test.test_cdd_python_all("petstore.json")
 
     def fake_run_cmd_py(cmd: Sequence[str], **kw: object) -> subprocess.CompletedProcess[str]:
-        """Create test/test_api.py in cdd-python-client."""
+        """Create test/test_api.py and test/test_client.py in cdd-python-client."""
         py_test_dir = tmp_path / "cdd-python-client" / "test"
         py_test_dir.mkdir(parents=True, exist_ok=True)
         (py_test_dir / "test_api.py").write_text("test_operations = [1]\n", encoding="utf-8")
+        (py_test_dir / "test_client.py").write_text("client.add_pet(body={})\ndata = json.loads(x)\n", encoding="utf-8")
         return subprocess.CompletedProcess(list(cmd), 0, stdout="", stderr="")
 
     monkeypatch.setattr(local_test, "run_cmd", fake_run_cmd_py)
@@ -469,6 +482,7 @@ def test_individual_toolchain_runners(tmp_path: Path, monkeypatch: pytest.Monkey
     local_test.test_cdd_ruby("petstore.json")
     (tmp_path / "cdd-ruby" / "Gemfile.lock").write_text("lock", encoding="utf-8")
     (tmp_path / "cdd-ruby" / "cdd-ruby.gemspec").write_text("spec.license = 'MIT OR Apache-2.0'\n", encoding="utf-8")
+    (tmp_path / "cdd-ruby" / "Gemfile").write_text("gem 'minitest', '~> 6.0'\n", encoding="utf-8")
     local_test.test_cdd_ruby("petstore.json")
     local_test.test_cdd_ruby("petstore.json")
 
