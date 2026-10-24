@@ -79,8 +79,11 @@ package-lock.json
 
 # Generated/downloaded test directories
 *-client*/
+*-server*/
 compliance-swagger-*/
 swagger-petstore-*/
+.mypy_cache/
+.ruff_cache/
 
 # Careless 'git add .' wildcards
 # IDE / Editor

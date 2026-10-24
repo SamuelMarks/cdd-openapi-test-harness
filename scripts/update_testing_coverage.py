@@ -1,95 +1,132 @@
 #!/usr/bin/env python3
-"""Updates the 'Testing Coverage' table in README.md.
+"""Updates the 'Testing Coverage' table in `README.md` (`scripts/update_testing_coverage.py`).
 
-This script parses the 'Testing Coverage' table in README.md and updates the
-WebAssembly (WASM) build and test statuses for each language toolchain. It does
-this by reading the `WASM.md` file within each toolchain directory and applying
-simple heuristics to determine if WASM is supported, unsupported, or out of scope.
+Parses the 'Testing Coverage' table in `README.md` and updates the Native and
+WebAssembly (WASM) build and test statuses for each language toolchain based on
+the canonical toolchain registry and `WASM.md` documentation.
 """
 
 import os
-import re
-import sys
 import subprocess
+import sys
+from typing import Optional
+
+from harness.registry import get_toolchain
 
 
-def main() -> None:
-    """Updates testing coverage based on WASM support.
+def _determine_native_status(root_dir: str, repo_name: str) -> str:
+    """Determine whether a toolchain submodule has native build/test support present.
 
-    Reads the README.md to find the testing coverage table, evaluates WASM
-    support for each toolchain based on their respective WASM.md files,
-    formats the table lines accordingly, and writes the updated table back
-    to README.md.
+    Args:
+        root_dir: Root directory of the test harness repository.
+        repo_name: Submodule directory name (e.g., 'cdd-ts').
+
+    Returns:
+        str: '✅ Yes' if the toolchain directory exists and is registered, '❌ No' otherwise.
     """
-    readme_path = "README.md"
-    if not os.path.exists(readme_path):
-        print("README.md not found.")
-        sys.exit(1)
+    repo_dir = os.path.join(root_dir, repo_name)
+    if not os.path.isdir(repo_dir):
+        return "❌ No"
+    try:
+        get_toolchain(repo_name)
+        return "✅ Yes"
+    except KeyError:
+        return "❌ No"
 
-    with open(readme_path, "r", encoding="utf-8") as f:
+
+def _determine_wasm_status(root_dir: str, repo_name: str) -> str:
+    """Determine WASM support status from the toolchain registry and `WASM.md` documentation.
+
+    Args:
+        root_dir: Root directory of the test harness repository.
+        repo_name: Submodule directory name (e.g., 'cdd-ts').
+
+    Returns:
+        str: '✅ Yes' if supported and documented, '❌ No' otherwise.
+    """
+    wasm_md_path = os.path.join(root_dir, repo_name, "WASM.md")
+    if not os.path.exists(wasm_md_path):
+        return "❌ No"
+
+    with open(wasm_md_path, encoding="utf-8") as wf:
+        content = wf.read().lower()
+    if "not supported" in content or "unsupported" in content:
+        return "❌ No"
+
+    try:
+        spec = get_toolchain(repo_name)
+        if not spec.supports_wasm and "wasm" not in content:
+            return "❌ No"
+    except KeyError:
+        pass
+    return "✅ Yes"
+
+
+def main(root_dir: Optional[str] = None) -> int:
+    """Parse `README.md`, check native and WASM support, and update the 'Testing Coverage' table.
+
+    Args:
+        root_dir: Optional repository root directory override.
+
+    Returns:
+        int: Exit status code (0 on success, 1 if `README.md` or the coverage table is missing).
+    """
+    resolved_root = root_dir if root_dir is not None else os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    readme_path = os.path.join(resolved_root, "README.md")
+
+    if not os.path.exists(readme_path):
+        print("README.md not found", file=sys.stderr)
+        return 1
+
+    with open(readme_path, encoding="utf-8") as f:
         lines = f.readlines()
 
     start_idx = -1
+    end_idx = -1
     for i, line in enumerate(lines):
         if "| Repository | Native Build/Tests | WASM Build/Tests |" in line:
-            start_idx = i
+            start_idx = i + 2
+        elif start_idx != -1 and (line.strip() == "" or not line.strip().startswith("|")):
+            end_idx = i
             break
 
     if start_idx == -1:
-        print("Could not find Testing Coverage table")
-        sys.exit(1)
+        print("Could not find Testing Coverage table in README.md", file=sys.stderr)
+        return 1
 
-    updated_lines = lines[:]
+    if end_idx == -1:
+        end_idx = len(lines)
+
+    print("Updating Testing Coverage table in README.md...")
     changed = False
 
-    for i in range(start_idx + 2, len(lines)):
-        line = lines[i].strip()
-        if not line or not line.startswith("|"):
-            break
-
+    for i in range(start_idx, end_idx):
+        line = lines[i]
         parts = [p.strip() for p in line.split("|")]
-        if len(parts) >= 4:
-            repo_name = parts[1].strip("` ")
-            if repo_name.startswith("cdd-"):
-                wasm_md_path = os.path.join(repo_name, "WASM.md")
-                has_wasm = False
+        if len(parts) < 4:
+            continue
 
-                if os.path.exists(wasm_md_path):
-                    with open(wasm_md_path, "r", encoding="utf-8") as wf:
-                        content = wf.read().lower()
-                        # Simple heuristics to determine WASM support based on the markdown contents
-                        if (
-                            "unsupported" in content
-                            and "possible" not in content
-                            and "yes" not in content
-                        ):
-                            has_wasm = False
-                        elif "out of scope" in content:
-                            has_wasm = False
-                        elif "missing" in content and "wasm support" in content:
-                            has_wasm = False
-                        else:
-                            has_wasm = True
-                else:
-                    has_wasm = False
+        repo_col = parts[1]
+        repo_name = repo_col.strip("` ")
 
-                wasm_status = "✅ Yes" if has_wasm else "❌ No"
+        native_status = _determine_native_status(resolved_root, repo_name)
+        wasm_status = _determine_wasm_status(resolved_root, repo_name)
 
-                # Align columns
-                new_line = f"| `{repo_name}` | ✅ Yes | {wasm_status} |\n"
-
-                if lines[i] != new_line:
-                    updated_lines[i] = new_line
-                    changed = True
+        nl = chr(10)
+        new_line = f"| `{repo_name}` | {native_status} | {wasm_status} |{nl}"
+        if lines[i] != new_line:
+            lines[i] = new_line
+            changed = True
 
     if changed:
         with open(readme_path, "w", encoding="utf-8") as f:
-            f.writelines(updated_lines)
+            f.writelines(lines)
         print("README.md Testing Coverage table has been updated.")
-        subprocess.run(["git", "add", "README.md"], check=False)
+        subprocess.run(["git", "add", readme_path], cwd=resolved_root, check=False)
     else:
         print("Testing Coverage table is already up to date.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

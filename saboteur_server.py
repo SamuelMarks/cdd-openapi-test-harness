@@ -1,105 +1,169 @@
 #!/usr/bin/env python3
-"""
-saboteur_server.py
+"""Saboteur chaos-engineering HTTP server (`saboteur_server.py`).
 
-A simple HTTP server designed for Chaos Engineering / Mutation Testing.
-It acts as a substitute for the real Petstore server to prove that 
-generated SDK tests actually validate responses rather than just "fire and forget".
+A lightweight HTTP server designed for Chaos Engineering and Mutation Testing.
+It acts as a substitute for the real Petstore server to prove that generated
+SDK tests actually validate HTTP status codes and response schemas rather than
+merely firing requests and ignoring responses.
 
 Modes:
   500: Returns HTTP 500 Internal Server Error for all requests.
-       (Proves tests validate HTTP status codes).
-  invalid_schema: Returns HTTP 200 OK, but with an invalid JSON payload.
-       (Proves tests perform deserialization/schema validation).
+  invalid_schema: Returns HTTP 200 OK with an invalid JSON payload.
 
 Usage:
   python3 saboteur_server.py [500|invalid_schema] [port]
 """
 
 import sys
+from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
+from typing import Optional, Sequence, Type
+
+
+@dataclass(frozen=True)
+class SaboteurConfig:
+    """Configuration for the Saboteur chaos server.
+
+    Attributes:
+        mode: Sabotage mode ('500' or 'invalid_schema').
+        port: TCP port to bind the HTTP server to.
+    """
+
+    mode: str = "500"
+    port: int = 8080
+
 
 class SaboteurServer(BaseHTTPRequestHandler):
-    """
-    Request handler that intercepts all HTTP requests and returns a sabotaged response
-    based on the configured failure mode.
-    """
-    
-    # Static configuration shared across all handler instances
-    MODE = '500'
+    """Request handler that intercepts all HTTP requests and returns a sabotaged response.
 
-    def handle_request(self):
-        """
-        Processes the incoming request and returns the sabotaged payload.
-        """
-        if self.MODE == '500':
+    Attributes:
+        mode: Active failure mode ('500' or 'invalid_schema').
+    """
+
+    mode: str = "500"
+
+    def handle_request(self) -> None:
+        """Process the incoming HTTP request and write the sabotaged payload."""
+        if self.mode == "500":
             self.send_response(500)
-            self.send_header('Content-Type', 'application/json')
+            self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(b'{"error": "Internal Sabotage"}')
-            
-        elif self.MODE == 'invalid_schema':
+        elif self.mode == "invalid_schema":
             self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
+            self.send_header("Content-Type", "application/json")
             self.end_headers()
-            # Valid JSON, but definitely fails OpenAPI schema validation for Pet/User/Order
             self.wfile.write(b'{"sabotage": true, "unexpected_type": ["array", "instead", "of", "object"]}')
-            
         else:
             self.send_response(400)
             self.end_headers()
             self.wfile.write(b"Unknown Saboteur Mode")
 
-    def do_GET(self):
-        """Handle GET requests."""
+    def do_GET(self) -> None:
+        """Handle HTTP GET requests."""
         self.handle_request()
 
-    def do_POST(self):
-        """Handle POST requests."""
+    def do_POST(self) -> None:
+        """Handle HTTP POST requests."""
         self.handle_request()
 
-    def do_PUT(self):
-        """Handle PUT requests."""
+    def do_PUT(self) -> None:
+        """Handle HTTP PUT requests."""
         self.handle_request()
 
-    def do_DELETE(self):
-        """Handle DELETE requests."""
+    def do_DELETE(self) -> None:
+        """Handle HTTP DELETE requests."""
         self.handle_request()
 
-    def do_PATCH(self):
-        """Handle PATCH requests."""
-        self.handle_request()
-        
-    def do_OPTIONS(self):
-        """Handle OPTIONS requests."""
+    def do_PATCH(self) -> None:
+        """Handle HTTP PATCH requests."""
         self.handle_request()
 
-    def do_HEAD(self):
-        """Handle HEAD requests."""
+    def do_OPTIONS(self) -> None:
+        """Handle HTTP OPTIONS requests."""
         self.handle_request()
-        
-    def log_message(self, format, *args):
-        """Suppress default HTTP logging to keep CI logs clean."""
-        pass
+
+    def do_HEAD(self) -> None:
+        """Handle HTTP HEAD requests."""
+        self.handle_request()
+
+    def log_message(self, format: str, *args: object) -> None:
+        """Suppress default HTTP logging to keep CI logs clean.
+
+        Args:
+            format: Format string for the log message.
+            *args: Format arguments for the log message.
+        """
+        return None
+
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
-    """Handle requests in a separate thread."""
-    pass
+    """Multi-threaded HTTP server handling each request in a separate thread."""
 
-if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        SaboteurServer.MODE = sys.argv[1]
-        
-    port = int(sys.argv[2]) if len(sys.argv) > 2 else 8080
-    
-    server_address = ('', port)
-    httpd = ThreadedHTTPServer(server_address, SaboteurServer)
-    
-    print(f"Saboteur Server running on port {port} in mode: {SaboteurServer.MODE}")
+
+def create_handler_class(mode: str) -> Type[SaboteurServer]:
+    """Create a SaboteurServer handler subclass bound to a specific sabotage mode.
+
+    Args:
+        mode: Sabotage mode ('500' or 'invalid_schema').
+
+    Returns:
+        Type[SaboteurServer]: Configured request handler class without mutating global state.
+    """
+
+    class ConfiguredSaboteurHandler(SaboteurServer):
+        """Request handler bound to a specific sabotage mode."""
+
+    ConfiguredSaboteurHandler.mode = mode
+    return ConfiguredSaboteurHandler
+
+
+def parse_config(argv: Optional[Sequence[str]] = None) -> SaboteurConfig:
+    """Parse CLI arguments into an immutable SaboteurConfig instance.
+
+    Args:
+        argv: Command-line arguments (excluding program name). Defaults to `sys.argv[1:]`.
+
+    Returns:
+        SaboteurConfig: Parsed mode and port configuration.
+    """
+    args = list(sys.argv[1:] if argv is None else argv)
+    mode = args[0] if len(args) > 0 else "500"
+    port = int(args[1]) if len(args) > 1 else 8080
+    return SaboteurConfig(mode=mode, port=port)
+
+
+def run_server(config: SaboteurConfig) -> None:
+    """Start and run the ThreadedHTTPServer until interrupted.
+
+    Args:
+        config: Saboteur server configuration specifying mode and port.
+    """
+    handler_cls = create_handler_class(config.mode)
+    httpd = ThreadedHTTPServer(("", config.port), handler_cls)
+    print(f"Saboteur Server running on port {config.port} in mode: {config.mode}")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
         httpd.server_close()
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    """CLI entrypoint for `saboteur_server.py`.
+
+    Args:
+        argv: Optional sequence of command-line arguments.
+
+    Returns:
+        int: Exit status code (0 on clean shutdown).
+    """
+    config = parse_config(argv)
+    run_server(config)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

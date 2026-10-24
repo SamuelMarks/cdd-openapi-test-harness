@@ -1,0 +1,94 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cdd-openapi-test-harness"
+version = "0.1.0"
+description = "End-to-end integration, conformance, and roundtrip test harness for Compiler Driven Development (CDD) OpenAPI toolchains."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0 OR MIT" }
+dependencies = [
+    "PyYAML>=6.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["harness*", "scripts*"]
+
+[tool.mypy]
+python_version = "3.9"
+strict = true
+disallow_untyped_defs = true
+disallow_any_unimported = false
+no_implicit_optional = true
+check_untyped_defs = true
+warn_return_any = true
+warn_unused_ignores = true
+show_error_codes = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = ["yaml", "yaml.*"]
+ignore_missing_imports = true
+
+[tool.ruff]
+target-version = "py39"
+line-length = 120
+include = [
+    "harness/**/*.py",
+    "scripts/**/*.py",
+    "tests/**/*.py",
+    "build_cdd.py",
+    "local_test.py",
+    "run_cdd_c_sdk.py",
+    "run_tests.py",
+    "saboteur_server.py",
+    "verify_coverage.py",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "C4", "UP", "D"]
+ignore = ["D203", "D213", "D107", "E501", "UP006", "UP007", "UP035"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=harness --cov=scripts --cov=build_cdd --cov=local_test --cov=run_cdd_c_sdk --cov=run_tests --cov=saboteur_server --cov=verify_coverage --cov-branch --cov-report=term-missing --cov-fail-under=100"
+
+[tool.coverage.run]
+branch = true
+source = [
+    "harness",
+    "scripts",
+    "build_cdd",
+    "local_test",
+    "run_cdd_c_sdk",
+    "run_tests",
+    "saboteur_server",
+    "verify_coverage",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+fail_under = 100
+
+[tool.interrogate]
+ignore-init-method = true
+ignore-init-module = false
+ignore-magic = false
+ignore-semiprivate = false
+ignore-private = false
+ignore-property-decorators = false
+ignore-module = false
+ignore-nested-functions = false
+ignore-nested-classes = false
+fail-under = 100
+exclude = ["cdd-*", "OAI-OpenAPI-Specification", "ts-morph", "emsdk", ".git"]
+verbose = 2

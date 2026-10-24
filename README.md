@@ -26,7 +26,7 @@ This project ties together independent Git repositories (submodules) containing 
 | [`cdd-php`](https://github.com/SamuelMarks/cdd-php) | PHP | Client |  | Swagger 2.0; OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-php/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-php/actions/workflows/ci.yml) |
 | [`cdd-python-all`](https://github.com/offscale/cdd-python-all) | Python | Client |  | Swagger 2.0; OpenAPI 3.2.0 | [![CI](https://github.com/offscale/cdd-python-all/actions/workflows/ci.yml/badge.svg)](https://github.com/offscale/cdd-python-all/actions/workflows/ci.yml) |
 | [`cdd-ruby`](https://github.com/SamuelMarks/cdd-ruby) | Ruby | Client |  | Swagger 2.0; OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-ruby/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-ruby/actions/workflows/ci.yml) |
-| [`cdd-rust`](https://github.com/SamuelMarks/cdd-rust) | Rust | Client & Server | CLI frontend for SDK | Swagger 2.0; OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-rust/actions/workflows/ci-cargo.yml/badge.svg)](https://github.com/SamuelMarks/cdd-rust/actions/workflows/ci-cargo.yml) |
+| [`cdd-rust`](https://github.com/SamuelMarks/cdd-rust) | Rust | Client & Server | CLI frontend for SDK | Swagger 2.0; OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-rust/actions/workflows/ci.yml) |
 | [`cdd-sh`](https://github.com/SamuelMarks/cdd-sh) | Shell (/bin/sh) | Client |  | Swagger 2.0; OpenAPI 3.2.0 | [![CI](https://github.com/SamuelMarks/cdd-sh/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelMarks/cdd-sh/actions/workflows/ci.yml) |
 | [`cdd-swift`](https://github.com/SamuelMarks/cdd-swift) | Swift | Client |  | Swagger 2.0; OpenAPI 3.2.0 | [![Swift](https://github.com/SamuelMarks/cdd-swift/actions/workflows/swift.yml/badge.svg)](https://github.com/SamuelMarks/cdd-swift/actions/workflows/swift.yml) |
 | [`cdd-ts`](https://github.com/offscale/cdd-ts) | TypeScript | Client | Auto-Admin UI; Angular; fetch; Axios; Node.js | Swagger 2.0; OpenAPI 3.2.0 | [![Tests and coverage](https://github.com/offscale/cdd-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/offscale/cdd-ts/actions/workflows/ci.yml) |
@@ -66,7 +66,7 @@ This table provides a snapshot of the current local integration capability and t
 To track granular Swagger 2.0 and OpenAPI 3.2.0 feature implementations (like `$ref` support, Webhooks, or Callbacks) across the toolchains:
 
 1. **Dashboard:** See [ECOSYSTEM_COMPLIANCE_OAS_3_2_0.md](ECOSYSTEM_COMPLIANCE_OAS_3_2_0.md) for a synthesized compatibility dashboard generated locally based on each submodule's claims.
-2. **Strict Conformance:** For strict structural verification, this repository provides deep AST-validation scripts (`scripts/check_all_conformance.sh`). These scripts execute exhaustive testing across the CDD toolchains to dynamically update tables in the sibling `openapi-conformance` project based on proven AST extraction capabilities. See `USAGE.md` for execution instructions.
+2. **Strict Conformance:** For strict structural verification, this repository provides deep AST-validation scripts (`scripts/check_all_conformance.py`). These scripts execute exhaustive testing across the CDD toolchains to dynamically update tables in the sibling `openapi-conformance` project based on proven AST extraction capabilities. See `USAGE.md` for execution instructions.
 
 ### Testing Coverage
 

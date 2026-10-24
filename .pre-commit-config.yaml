@@ -1,10 +1,28 @@
 repos:
   - repo: local
     hooks:
-      - id: update-readme-status
-        name: Update README status
-        entry: ./scripts/update_readme_status.py
-        language: script
+      - id: ruff-check
+        name: Ruff Linter & Docstring Check
+        entry: ruff check harness scripts tests build_cdd.py local_test.py run_cdd_c_sdk.py run_tests.py saboteur_server.py verify_coverage.py
+        language: system
         pass_filenames: false
-        # Run whenever test scripts or submodule code changes
-        files: '^(local-test\.sh|cdd-.*/.*)$'
+      - id: ruff-format
+        name: Ruff Formatter Check
+        entry: ruff format --check harness scripts tests build_cdd.py local_test.py run_cdd_c_sdk.py run_tests.py saboteur_server.py verify_coverage.py
+        language: system
+        pass_filenames: false
+      - id: mypy-strict
+        name: Mypy Strict Type Check
+        entry: mypy harness scripts tests build_cdd.py local_test.py run_cdd_c_sdk.py run_tests.py saboteur_server.py verify_coverage.py
+        language: system
+        pass_filenames: false
+      - id: interrogate-docs
+        name: Interrogate 100% Docstring Coverage
+        entry: interrogate harness scripts tests build_cdd.py local_test.py run_cdd_c_sdk.py run_tests.py saboteur_server.py verify_coverage.py
+        language: system
+        pass_filenames: false
+      - id: pytest-coverage
+        name: Pytest 100% Unit & Branch Coverage
+        entry: pytest
+        language: system
+        pass_filenames: false

@@ -16,12 +16,12 @@ This will download:
 - `cdd-java`
 - `cdd-kotlin`
 - `cdd-php`
-- `cdd-python-client`
+- `cdd-python-all`
 - `cdd-ruby`
 - `cdd-rust`
 - `cdd-sh`
 - `cdd-swift`
-- `cdd-web-ng`
+- `cdd-ts`
 - `OAI-OpenAPI-Specification`
 
 ## 2. Generate and Run Tests Locally
@@ -30,11 +30,11 @@ The primary test mechanism is the **Roundtrip Test**. This ensures a toolchain c
 
 You can find the official OpenAPI v3.0 test fixtures in `OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/`.
 
-### Running the Angular Roundtrip Tests (`cdd-web-ng`)
+### Running the TypeScript Roundtrip Tests (`cdd-ts`)
 
 First, ensure dependencies are installed and the CLI is built:
 ```sh
-cd cdd-web-ng
+cd cdd-ts
 npm install
 npm run build
 cd ..
@@ -42,34 +42,34 @@ cd ..
 
 Run the roundtrip:
 ```sh
-node cdd-web-ng/dist/cli.js from_openapi -i OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/petstore.yaml --output temp-ng
-node cdd-web-ng/dist/cli.js to_openapi -f temp-ng --format yaml > temp-ng-spec.yaml
+node cdd-ts/dist/cli.js from_openapi to_sdk -i OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/petstore.yaml --output temp-ng
+node cdd-ts/dist/cli.js to_openapi -i temp-ng --format yaml -o temp-ng-spec.yaml
 ```
 
 ### Running the Kotlin Roundtrip Tests (`cdd-kotlin`)
 
 ```sh
 cd cdd-kotlin
-./gradlew run --args="from_openapi -i ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/petstore.yaml --clientName TestClient --output ../temp-kt"
-./gradlew run --args="to_openapi -f ../temp-kt --format yaml" > ../temp-kt-spec.yaml
+./gradlew run --args="from_openapi to_sdk -i ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/petstore.yaml --output ../temp-kt"
+./gradlew run --args="to_openapi -i ../temp-kt --format yaml -o ../temp-kt-spec.yaml"
 ```
 
 ### Running the Rust Scaffolding Tests (`cdd-rust`)
 
-The Rust toolchain generates server-side Actix-Web scaffolding and integration contracts.
+The Rust toolchain generates client and server-side Actix-Web scaffolding and integration contracts.
 
 ```sh
 cd cdd-rust
-cargo run -p cdd-cli -- scaffold --openapi-path "../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/petstore.yaml" --output-dir "../temp-rs/src/handlers"
-cargo run -p cdd-cli -- test-gen --openapi-path "../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/petstore.yaml" --output-path "../temp-rs/tests/api_contracts.rs" --app-factory "crate::create_app"
+cargo run -p cdd-cli -- from_openapi to_sdk -i "../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/petstore.yaml" -o "../temp-rs"
+cargo run -p cdd-cli -- to_openapi -i "../temp-rs/src" -o "../temp-rs/spec.yaml"
 ```
 
-### Running the Python Roundtrip Tests (`cdd-python-client`)
+### Running the Python Roundtrip Tests (`cdd-python-all`)
 
-The Python toolchain requires a virtual environment and `libcst`. It also natively synchronizes directories. Note that the Python CLI currently expects JSON input.
+The Python toolchain requires a virtual environment and `libcst`. It also natively synchronizes directories.
 
 ```sh
-cd cdd-python-client
+cd cdd-python-all
 python3 -m venv venv
 source venv/bin/activate
 pip install pyyaml
@@ -78,17 +78,16 @@ cd ..
 
 mkdir -p temp-py
 # Convert YAML to JSON for the Python CLI
-python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/petstore.yaml > temp-py/spec.json
+python3 -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/petstore.yaml > temp-py-spec.json
 
-# Generate the Python code
-cdd sync --from-openapi temp-py/spec.json --to-python temp-py/
-# Sync the directory (extracts the AST back to openapi.json and regenerates)
-cdd sync --dir temp-py/
+# Generate the Python code and extract back to OpenAPI
+cdd-python from_openapi to_sdk -i temp-py-spec.json -o temp-py
+cdd-python to_openapi -i temp-py -o temp-py-out.json
 ```
 
 ### Running the Swift Roundtrip Tests (`cdd-swift`)
 
-The Swift toolchain uses SwiftSyntax to parse Swift structs back into OpenAPI schemas. It also natively expects JSON input.
+The Swift toolchain uses SwiftSyntax to parse Swift structs back into OpenAPI schemas.
 
 ```sh
 cd cdd-swift
@@ -99,41 +98,33 @@ cd ..
 python3 -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/petstore.yaml > temp-swift-spec.json
 
 # Generate the Swift Code
-cdd-swift/.build/release/cdd-swift generate-swift temp-swift-spec.json -o temp-swift.swift
+cdd-swift/.build/release/cdd-swift from_openapi to_sdk -i temp-swift-spec.json -o temp-swift
 # Extract OpenAPI from the generated Swift code
-cdd-swift/.build/release/cdd-swift parse-swift temp-swift.swift -o temp-swift-out.json
+cdd-swift/.build/release/cdd-swift to_openapi -i temp-swift/Sources/GeneratedSDK/models.swift -o temp-swift-out.json
 ```
 
 ### Running the Shell Roundtrip Tests (`cdd-sh`)
 
-The shell script compiler supports loading specs and emitting bash scripts containing curl routes, or vice versa.
+The shell script compiler supports loading specs and emitting POSIX shell scripts containing curl routes, or vice versa.
 
 ```sh
 cd cdd-sh
 # Convert YAML to JSON
-python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/petstore.yaml > temp-sh-spec.json
+python3 -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/petstore.yaml > temp-sh-spec.json
 
-# Parse into ast.json
-./cdd.sh parse openapi temp-sh-spec.json
-
-# Emit bash routes script
-./cdd.sh emit routes temp-routes.sh
-
-# Re-parse routes script to ast.json
-./cdd.sh parse routes temp-routes.sh
-
-# Re-emit OpenAPI JSON spec
-./cdd.sh emit openapi temp-sh-out.json
+# Generate shell SDK and re-emit OpenAPI JSON spec
+./cdd.sh from_openapi -i temp-sh-spec.json -o temp-sh-dir
+./cdd.sh to_openapi -i temp-sh-dir -o temp-sh-out.json
 ```
 
 ### Running the Go Roundtrip Tests (`cdd-go`)
 
-The `cdd-go` cli leverages Go `ast` to parse the struct nodes and standard interface functions.
+The `cdd-go` CLI leverages Go `ast` to parse struct nodes and standard interface functions.
 
 ```sh
 cd cdd-go
 # Convert YAML to JSON
-python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/petstore.yaml > temp-go-spec.json
+python3 -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/petstore.yaml > temp-go-spec.json
 
 # Scaffold the routes/models
 go run ./cmd/cdd_go from_openapi -i temp-go-spec.json -o temp-go
@@ -149,7 +140,7 @@ C# supports extracting OpenAPI schema data via the .NET Roslyn compiler API.
 ```sh
 cd cdd-csharp
 # Convert YAML to JSON
-python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/petstore.yaml > temp-cs-spec.json
+python3 -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/petstore.yaml > temp-cs-spec.json
 
 # Scaffold C# Models/API Interfaces
 dotnet run --project src/Cdd.OpenApi.Cli -- from_openapi -i temp-cs-spec.json -o temp-cs
@@ -165,70 +156,70 @@ To orchestrate a new codegen repository into this suite:
 1. Create a `cdd-<language>` repository.
 2. Ensure your language repository exposes a CLI executable.
 3. Your CLI MUST support bidirectional synchronization (or the conceptual equivalent):
-   * `from_openapi` (e.g. `cdd-lang from_openapi -i spec.json`)
-   * `to_openapi` (e.g. `cdd-lang to_openapi -f path/to/code`)
+   * `from_openapi` (e.g. `cdd-lang from_openapi -i spec.json -o out_dir`)
+   * `to_openapi` (e.g. `cdd-lang to_openapi -i path/to/code -o out_spec.json`)
 4. Add the submodule: `git submodule add <remote-url> cdd-<language>`
-5. Integrate it into the CI loop in `.github/workflows/roundtrip.yml`.
+5. Register it in `harness/registry.py` and integrate it into `.github/workflows/roundtrip.yml`.
 
 ## 4. Testing and Filtering
 
-This project includes advanced filtering options via environment variables to target specific builds, environments, or toolchains. These apply to `local-test.sh` and the GitHub actions `roundtrip.yml` workflows.
+This project includes advanced filtering options via environment variables to target specific builds, environments, or toolchains. These apply to `local_test.py` and the GitHub Actions workflows.
 
 ### Generating the Testing Matrix
 
-To programmatically test the entire ecosystem against the `petstore.json` specification (as shown in the ASCII matrix), run:
+To programmatically test the entire ecosystem against the `petstore.json` specification, run:
 
 ```sh
 # Ensure you have petstore_server running, or the docker engine available.
-./local-test.sh all
+python3 local_test.py all
 ```
 
 ### Filtering Executions
 
-If you want to isolate tests, you can leverage three powerful environment variables:
+If you want to isolate tests, you can leverage three environment variables:
 
 1. **`ONLY_TEST`** (Whitelist): Targets specific implementations. Ignores all others.
    ```sh
-   # Only test the Angular client generator and the C# generator
-   ONLY_TEST="cdd-web-ng,cdd-csharp" ./local-test.sh test
+   # Only test the TypeScript client generator and the C# generator
+   ONLY_TEST="cdd-ts,cdd-csharp" python3 local_test.py only-test
    ```
 
 2. **`IGNORE_TESTS`** (Blacklist): Skips specific implementations.
    ```sh
-   # Skip testing the older C and Ruby implementations
-   IGNORE_TESTS="cdd-c,cdd-ruby" ./local-test.sh test
+   # Skip testing the C and Ruby implementations
+   IGNORE_TESTS="cdd-c,cdd-ruby" python3 local_test.py only-test
    ```
 
 3. **`TARGET_TYPE`**: Filters by the target type of the implementation (`client` or `server`).
    ```sh
    # Test only the server generators
-   TARGET_TYPE="server" ./local-test.sh roundtrip
+   TARGET_TYPE="server" python3 local_test.py roundtrip
    ```
 
 ## 5. OpenAPI Conformance Testing
 
 This repository includes a universal Swagger 2.0 and OpenAPI 3.2.0 conformance testing suite that relies on deep AST object extraction. These scripts verify exactly which OpenAPI features (e.g., `Server Object`, `Security Scheme Object`, `Reference Object`) are preserved and supported when a toolchain parses a spec into code and re-extracts it.
 
-The outputs are written directly into tracking markdown tables (like those in the `openapi-conformance` sibling repository).
+The outputs are written directly into tracking markdown tables.
 
 ### Running Batch Conformance
 
 To automatically build and test every `cdd-*` submodule for its conformance levels, execute:
 
 ```sh
-./scripts/check_all_conformance.sh
+python3 scripts/check_all_conformance.py
 ```
 
 This will run through a suite of test YAML files from `OAI-OpenAPI-Specification`, attempt the bidirectional `from_openapi` -> `to_openapi` mapping, and tally up the features successfully emitted by the AST extractors.
 
 ### Checking a Specific Project
 
-If you want to check a specific project or debug an extraction failure, you can use the wrapper script. It requires the project directory, the output markdown file, and the CLI execution sequence for the toolchain:
+If you want to check a specific project or debug an extraction failure, you can use the project checker script. It requires the project directory, the output markdown file, and the CLI execution sequence for the toolchain:
 
 ```sh
 # Example: Checking cdd-rust compliance
-./scripts/check_conformance_project.sh cdd-rust ../openapi-conformance/openapi-3.2.0/client-sdk.md ./target/release/cdd-cli
+python3 scripts/check_conformance_project.py cdd-rust cdd-rust/conformance/openapi-3.2.0/client-sdk.md ./target/release/cdd-cli
 
 # Example: Checking cdd-ts compliance
-./scripts/check_conformance_project.sh cdd-ts ../openapi-conformance/openapi-3.2.0/client-sdk.md node dist/cli.js
+python3 scripts/check_conformance_project.py cdd-ts cdd-ts/conformance/openapi-3.2.0/client-sdk.md node dist/cli.js
 ```

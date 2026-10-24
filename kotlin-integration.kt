@@ -1,3 +1,11 @@
+/**
+ * Kotlin multiplatform integration test suite (`kotlin-integration.kt`).
+ *
+ * Exercises the generated Kotlin Ktor client against the local Petstore
+ * server (defaulting to `http://localhost:8080/v2`, configurable via the
+ * `PETSTORE_BASE_URL` environment variable) to validate happy-path CRUD
+ * operations, HTTP status handling, and JSON schema serialization.
+ */
 package com.example.auto
 
 import org.example.api.ApiClient
@@ -5,53 +13,78 @@ import org.example.models.Pet
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
-import kotlin.test.fail
 
+/**
+ * End-to-end integration tests for the generated Petstore Kotlin SDK client.
+ *
+ * @property baseUrl Target Petstore server base URL (defaults to `http://localhost:8080/v2`).
+ * @property client Configured Ktor [HttpClient] with JSON content negotiation.
+ * @property petApi Generated [ApiClient] instance bound to [baseUrl].
+ */
 class IntegrationTest {
-    private val client = HttpClient {
+    /**
+     * Base URL of the Petstore service under test.
+     */
+    private val baseUrl: String = System.getenv("PETSTORE_BASE_URL") ?: "http://localhost:8080/v2"
+
+    /**
+     * Ktor HTTP client configured with kotlinx.serialization JSON support.
+     */
+    private val client: HttpClient = HttpClient {
         install(ContentNegotiation) {
             json(Json {
                 ignoreUnknownKeys = true
-                encodeDefaults = true
+                prettyPrint = true
+                isLenient = true
             })
         }
     }
-    
-    // Fallback to swagger.io but use localhost if possible
-    private val petApi = ApiClient(client, "https://petstore.swagger.io/v2")
 
+    /**
+     * Generated API client targeting [baseUrl].
+     */
+    private val petApi: ApiClient = ApiClient(baseUrl = baseUrl, client = client)
+
+    /**
+     * Verifies full Pet lifecycle operations (`addPet`, `getPetById`, `findPetsByStatus`,
+     * `deletePet`, and post-deletion 404 verification) against the local server.
+     */
     @Test
-    fun testPetOperations() = runTest {
-        val petId = (1000000..9000000).random().toLong()
-        val pet = Pet(
+    fun testPetOperations() = runBlocking {
+        val petId = 998877665L
+        val newPet = Pet(
             id = petId,
-            name = "KotlinTestPet",
-            photoUrls = listOf("http://example.com/photo"),
+            name = "KtorIntegrationDog",
+            photoUrls = listOf("http://example.com/photo.jpg"),
             status = "available"
         )
 
-        // 1. Create Pet
-        val addResult = petApi.addPet(pet)
-        if (addResult.isFailure) {
-            fail("Failed to create pet: ${addResult.exceptionOrNull()?.message}")
-        }
+        // 1. Add Pet
+        val addResult = petApi.addPet(newPet)
+        assertTrue(addResult.isSuccess, "Failed to add pet: ${addResult.exceptionOrNull()}")
 
-        // 2. Read Pet
+        // 2. Get Pet by ID
         val getResult = petApi.getPetById(petId)
-        assertTrue(getResult.isSuccess, "Failed to read pet")
+        assertTrue(getResult.isSuccess, "Failed to get pet: ${getResult.exceptionOrNull()}")
+        val fetchedPet = getResult.getOrNull()
+        assertNotNull(fetchedPet)
+        assertEquals("KtorIntegrationDog", fetchedPet.name)
 
-        // 3. Update Pet
-        val updatedPet = pet.copy(name = "UpdatedKotlinPet", status = "sold")
-        val updateResult = petApi.updatePet(updatedPet)
-        assertTrue(updateResult.isSuccess, "Failed to update pet")
+        // 3. Find by Status
+        val findResult = petApi.findPetsByStatus(listOf("available"))
+        assertTrue(findResult.isSuccess, "Failed to find pets: ${findResult.exceptionOrNull()}")
+        val pets = findResult.getOrNull()
+        assertNotNull(pets)
+        assertTrue(pets.isNotEmpty(), "Expected at least one available pet")
 
         // 4. Delete Pet
-        val deleteResult = petApi.deletePet(api_key = "special-key", petId = petId)
+        val deleteResult = petApi.deletePet(petId = petId)
         assertTrue(deleteResult.isSuccess, "Failed to delete pet")
 
         // 5. Verify 404

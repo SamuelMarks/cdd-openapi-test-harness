@@ -1,92 +1,87 @@
 #!/usr/bin/env python3
-"""
-Script: check_all_conformance.py
-Description: Runs the conformance checker across all language submodules.
+"""Script: `scripts/check_all_conformance.py`.
+
+Runs the conformance checker across all registered language submodules.
 Usage: python scripts/check_all_conformance.py
 """
 
 import os
-import sys
 import subprocess
+import sys
+from pathlib import Path
+from typing import Optional, Sequence
+
+from harness.registry import get_toolchains
 
 
-def main() -> None:
-    """Run all conformance checks for all language submodules."""
-    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    os.chdir(root_dir)
+def run_check(
+    lang: str,
+    build_cmd: Sequence[str],
+    check_cmd: Sequence[str],
+    root_dir: Optional[Path] = None,
+) -> bool:
+    """Build and run the conformance checker for a specific language toolchain.
 
-    target_dir = os.path.join("..", "openapi-conformance", "openapi-3.2.0")
-    if not os.path.isdir(target_dir):
-        print(f"Error: {target_dir} directory not found.")
-        print(
-            "Please ensure the openapi-conformance repository is cloned as a sibling directory."
-        )
-        sys.exit(1)
+    Args:
+        lang: The name of the language toolchain directory (e.g., 'cdd-rust').
+        build_cmd: Command sequence to compile or build the toolchain.
+        check_cmd: Command sequence to run the toolchain's CLI for conformance checking.
+        root_dir: Repository root directory. Defaults to parent of `scripts/`.
 
-    markdown_target = os.path.join(target_dir, "client-sdk.md")
+    Returns:
+        bool: True if the conformance check executed, False if the directory was absent.
+    """
+    resolved_root = root_dir if root_dir is not None else Path(__file__).resolve().parent.parent
+    lang_dir = resolved_root / lang
+    md_file = lang_dir / "conformance" / "openapi-3.2.0" / "client-sdk.md"
 
     print("==========================================================")
-    print("Running universal OpenAPI 3.2.0 conformance checks...")
-    print(f"Targeting Markdown: {markdown_target}")
+    print(f"Checking {lang}")
     print("==========================================================")
 
-    checker_script = [
-        sys.executable,
-        os.path.join("scripts", "check_conformance_project.py"),
-    ]
+    if lang_dir.is_dir():
+        if build_cmd:
+            prev_dir = os.getcwd()
+            os.chdir(lang_dir)
+            try:
+                subprocess.run(list(build_cmd), check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            finally:
+                os.chdir(prev_dir)
 
-    def run_check(lang: str, build_cmd: list, check_cmd: list) -> None:
-        if os.path.isdir(lang):
-            print(f"\n---> Testing {lang}")
-            if build_cmd:
-                subprocess.run(build_cmd, cwd=lang, check=False)
-            cmd = checker_script + [lang, markdown_target] + check_cmd
-            subprocess.run(cmd, check=False)
+        check_script = resolved_root / "scripts" / "check_conformance_project.py"
+        cmd = [sys.executable, str(check_script), str(lang_dir), str(md_file)] + list(check_cmd)
+        subprocess.run(cmd, check=False)
+        return True
 
-    run_check(
-        "cdd-ts", ["npm", "run", "build", "--if-present"], ["node", "dist/cli.js"]
-    )
-    run_check("cdd-c", ["make"], ["./bin/cdd-c"])
-    run_check("cdd-cpp", ["make", "build"], ["./build/cdd-cpp"])
-    run_check(
-        "cdd-csharp",
-        ["dotnet", "build", "--configuration", "Release"],
-        [
-            "dotnet",
-            "run",
-            "--project",
-            "src/Cdd.OpenApi.Cli",
-            "--configuration",
-            "Release",
-            "--",
-        ],
-    )
-    run_check(
-        "cdd-go", ["go", "build", "-o", "bin/cdd_go", "./cmd/cdd-go"], ["./bin/cdd_go"]
-    )
-    run_check("cdd-java", [], ["./gradlew", "run", "--args="])
-    run_check("cdd-kotlin", [], ["./cdd.sh"])
-    run_check("cdd-php", [], ["php", "bin/cdd-php"])
-    run_check(
-        "cdd-python-all",
-        [sys.executable, "-m", "pip", "install", "-e", "."],
-        ["cdd-python"],
-    )
-    run_check("cdd-ruby", [], ["ruby", "bin/cdd-ruby"])
-    run_check(
-        "cdd-rust",
-        ["cargo", "build", "-p", "cdd-cli", "--release"],
-        ["./target/release/cdd-cli"],
-    )
-    run_check("cdd-sh", [], ["./cdd.sh"])
-    run_check(
-        "cdd-swift", ["swift", "build", "-c", "release"], [".build/release/cdd-swift"]
-    )
+    print(f"Skipping {lang} (directory not found)")
+    return False
 
-    print("\n==========================================================")
+
+def main(root_dir: Optional[Path] = None) -> int:
+    """Orchestrate conformance checks across all CDD toolchains.
+
+    Args:
+        root_dir: Optional repository root path override for testing.
+
+    Returns:
+        int: Exit status code (0 on success, 1 if OAI-OpenAPI-Specification is missing).
+    """
+    resolved_root = root_dir if root_dir is not None else Path(__file__).resolve().parent.parent
+    os.chdir(resolved_root)
+
+    target_dir = resolved_root / "OAI-OpenAPI-Specification"
+    if not target_dir.is_dir():
+        print("Error: OAI-OpenAPI-Specification submodule not found. Run 'git submodule update --init'")
+        return 1
+
+    for spec in get_toolchains():
+        run_check(spec.name, spec.build_cmd, spec.check_cmd, root_dir=resolved_root)
+
+    print("==========================================================")
     print("All toolchains tested. Conformance tracking table updated.")
     print("==========================================================")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

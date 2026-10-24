@@ -1,116 +1,124 @@
 #!/usr/bin/env python3
-"""Updates the 'Current Ecosystem Status' table in the README.md file.
+"""Updates the 'Current Ecosystem Status' table in `README.md` (`scripts/update_readme_status.py`).
 
-This script automates the process of updating the ecosystem status by running
-the local tests (via `local-test.sh`) for each CDD toolchain to determine if
-the local tests and roundtrip tests pass or fail, and dynamically updates the
-markdown table with the live results.
+Automates updating the ecosystem status by running the local tests (via
+`local_test.py`) for each CDD toolchain and recording whether the native tests,
+WASM builds, and roundtrip tests pass or fail.
 """
 
 import os
-import re
 import subprocess
 import sys
+from typing import List, Optional
 
 
-def run_test(toolchain: str, test_type: str) -> bool:
-    """Executes the local test script for a specific toolchain and test type.
+def run_test(repo_name: str, mode: str = "", root_dir: Optional[str] = None) -> str:
+    """Run `local_test.py` for a specific repository and mode.
 
     Args:
-        toolchain (str): The name of the CDD toolchain directory (e.g., 'cdd-java').
-        test_type (str): The type of test to run ('only-test' or 'roundtrip').
+        repo_name: The name of the toolchain repository (e.g., 'cdd-ts').
+        mode: The execution mode for `local_test.py` (e.g., 'only-test', 'roundtrip', or '').
+        root_dir: Optional repository root directory override.
 
     Returns:
-        bool: True if the test execution completes successfully (exit code 0), False otherwise.
+        str: A status string indicating the outcome ('✅ Passed', '❌ Failed', '❌ Timeout', or '❌ Error').
     """
-    print(f"Running {test_type} for {toolchain}...")
     env = os.environ.copy()
-    env["ONLY_TEST"] = toolchain
+    env["ONLY_TEST"] = repo_name
+    cmd: List[str] = [sys.executable, "local_test.py"]
+    if mode:
+        cmd.append(mode)
 
-    cmd = ["./local-test.sh", test_type]
     try:
-        # Run with timeout to prevent hanging
-        result = subprocess.run(
-            cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=300
+        res = subprocess.run(
+            cmd,
+            env=env,
+            cwd=root_dir,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=300,
+            check=False,
         )
-        # return true if exit code 0
-        return result.returncode == 0
+        return "✅ Passed" if res.returncode == 0 else "❌ Failed"
     except subprocess.TimeoutExpired:
-        print(f"Timeout for {toolchain} {test_type}")
-        return False
-    except Exception as e:
-        print(f"Error running {toolchain} {test_type}: {e}")
-        return False
+        return "❌ Timeout"
+    except Exception:
+        return "❌ Error"
 
 
-def main() -> None:
-    """Main entry point.
+def main(root_dir: Optional[str] = None) -> int:
+    """Parse `README.md`, execute tests for each toolchain, and update the status table.
 
-    Parses README.md, locates the ecosystem status table, runs validation
-    tests for each identified toolchain, and overwrites README.md if the
-    statuses have changed.
+    Args:
+        root_dir: Optional repository root directory override.
+
+    Returns:
+        int: Exit status code (0 on success, 1 if `README.md` or the status table is missing).
     """
-    readme_path = "README.md"
+    resolved_root = root_dir if root_dir is not None else os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    readme_path = os.path.join(resolved_root, "README.md")
     if not os.path.exists(readme_path):
-        print("README.md not found.")
-        sys.exit(1)
+        print("README.md not found", file=sys.stderr)
+        return 1
 
-    with open(readme_path, "r", encoding="utf-8") as f:
+    with open(readme_path, encoding="utf-8") as f:
         lines = f.readlines()
 
-    in_table = False
     start_idx = -1
-
+    end_idx = -1
     for i, line in enumerate(lines):
-        if "| Implementation" in line and "| Local Test Status" in line:
-            in_table = True
-            start_idx = i
+        if "| Repository | Target Language | Role | Test Status | Roundtrip Status |" in line:
+            start_idx = i + 2
+        elif start_idx != -1 and (line.strip() == "" or not line.strip().startswith("|")):
+            end_idx = i
             break
 
     if start_idx == -1:
-        print("Could not find the target table in README.md")
-        sys.exit(1)
+        print("Could not find Ecosystem Status table in README.md", file=sys.stderr)
+        return 1
 
-    updated_lines = lines[:]
+    if end_idx == -1:
+        end_idx = len(lines)
+
+    print("Updating README.md ecosystem status...")
     changed = False
 
-    for i in range(start_idx + 2, len(lines)):
-        line = lines[i].strip()
-        if not line or not line.startswith("|"):
-            break
-
+    for i in range(start_idx, end_idx):
+        line = lines[i]
         parts = [p.strip() for p in line.split("|")]
-        if len(parts) >= 5:
-            impl_name = parts[1].strip("` ")
-            type_val = parts[2].strip("` ")
+        if len(parts) < 6:
+            continue
 
-            if impl_name.startswith("cdd-"):
-                local_ok = run_test(impl_name, "only-test")
-                roundtrip_ok = run_test(impl_name, "roundtrip")
+        repo_col = parts[1]
+        repo_name = repo_col.strip("` ")
+        lang_col = parts[2]
+        role_col = parts[3]
 
-                local_status = "✅ Passed" if local_ok else "❌ Failed"
-                roundtrip_status = "✅ Passed" if roundtrip_ok else "❌ Failed"
+        print(f"Testing {repo_name}...")
 
-                # Format to keep the markdown table somewhat aligned
-                # | `cdd-c`             | `client`     | ✅ Passed          | ✅ Passed                |
-                impl_col = f"`{impl_name}`"
-                type_col = f"`{type_val}`"
+        test_status = run_test(repo_name, "only-test", root_dir=resolved_root)
+        if test_status == "✅ Passed":
+            wasm_And_test = run_test(repo_name, "", root_dir=resolved_root)
+            if wasm_And_test != "✅ Passed":
+                test_status = "✅ Passed (WASM ❌)"
 
-                new_line = f"| {impl_col.ljust(19)} | {type_col.ljust(12)} | {local_status.ljust(17)} | {roundtrip_status.ljust(23)} |\n"
+        rt_status = run_test(repo_name, "roundtrip", root_dir=resolved_root)
 
-                if lines[i] != new_line:
-                    updated_lines[i] = new_line
-                    changed = True
+        nl = chr(10)
+        new_line = f"| `{repo_name}` | {lang_col} | {role_col} | {test_status} | {rt_status} |{nl}"
+        if lines[i] != new_line:
+            lines[i] = new_line
+            changed = True
 
     if changed:
         with open(readme_path, "w", encoding="utf-8") as f:
-            f.writelines(updated_lines)
-        print("README.md has been updated.")
-        # Optionally add to git so the pre-commit hook includes the change
-        subprocess.run(["git", "add", "README.md"], check=False)
+            f.writelines(lines)
+        print("README.md has been updated with the latest test statuses.")
+        subprocess.run(["git", "add", readme_path], cwd=resolved_root, check=False)
     else:
         print("README.md is already up to date.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
