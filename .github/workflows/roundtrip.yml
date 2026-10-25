@@ -198,10 +198,8 @@ jobs:
               filename=$(basename "$file")
               echo "Testing $filename with cdd-sh..."
               python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-sh-spec.json
-              ./cdd.sh parse openapi temp-sh-spec.json
-              ./cdd.sh emit routes temp-routes.sh
-              ./cdd.sh parse routes temp-routes.sh
-              ./cdd.sh emit openapi temp-sh-out.json
+              ./cdd.sh from_openapi -i temp-sh-spec.json -o temp-routes.sh
+              ./cdd.sh to_openapi -i temp-routes.sh -o temp-sh-out.json
               rm -f temp-sh-spec.json temp-routes.sh temp-sh-out.json ast.json
           done
           cd ..
@@ -341,8 +339,8 @@ jobs:
               echo "Testing file with cdd-java..."
               mkdir -p ../temp-java
               python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > ../temp-java-spec.json
-              java -cp "lib/*:bin" cli.Main from_openapi to_sdk -i ../temp-java-spec.json -o ../temp-java
-              java -cp "lib/*:bin" cli.Main to_openapi -i ../temp-java -o ../temp-java/spec.yaml
+              ./gradlew run --args="from_openapi to_sdk -i ../temp-java-spec.json -o ../temp-java"
+              ./gradlew run --args="to_openapi -i ../temp-java -o ../temp-java/spec.yaml"
               rm -rf ../temp-java ../temp-java-spec.json
           done
 
@@ -602,7 +600,7 @@ jobs:
           submodules: recursive
       - name: Verify Compliance Dashboard
         run: |
-          python3 ./scripts/generate_dashboard.py
+          PYTHONPATH=. python3 ./scripts/generate_dashboard.py
           if ! git diff --exit-code ECOSYSTEM_COMPLIANCE_OAS_3_2_0.md; then
             echo "Error: ECOSYSTEM_COMPLIANCE_OAS_3_2_0.md is out of date. Please run python3 ./scripts/generate_dashboard.py and commit the changes."
             exit 1

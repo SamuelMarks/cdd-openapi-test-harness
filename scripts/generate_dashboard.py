@@ -1,30 +1,20 @@
 #!/usr/bin/env python3
 """Generates the `ECOSYSTEM_COMPLIANCE_OAS_3_2_0.md` dashboard (`scripts/generate_dashboard.py`).
 
-Parses the `COMPLIANCE.md` files in each CDD toolchain submodule to evaluate
-OpenAPI 3.2.0 feature support, and generates a consolidated Markdown compliance
-matrix without executing file writes at module import time.
+Parses the `COMPLIANCE.md` files in each CDD toolchain submodule (derived from
+`harness.registry`) to evaluate OpenAPI 3.2.0 feature support, and generates a
+consolidated Markdown compliance matrix.
 """
 
 import os
+import re
 import sys
 from typing import Dict, List, Optional, Tuple
 
-TOOLCHAINS: Dict[str, str] = {
-    "cdd-c": "C (C89)",
-    "cdd-cpp": "C++",
-    "cdd-csharp": "C#",
-    "cdd-go": "Go",
-    "cdd-java": "Java",
-    "cdd-kotlin": "Kotlin (Multiplatform)",
-    "cdd-php": "PHP",
-    "cdd-python-all": "Python",
-    "cdd-ruby": "Ruby",
-    "cdd-rust": "Rust",
-    "cdd-sh": "Shell (`/bin/sh`)",
-    "cdd-swift": "Swift",
-    "cdd-ts": "TypeScript",
-}
+from harness.errors import DashboardError
+from harness.registry import get_toolchains
+
+TOOLCHAINS: Dict[str, str] = {spec.name: spec.language for spec in get_toolchains()}
 
 FEATURES: Dict[str, List[str]] = {
     "Root (`$self`, `jsonSchemaDialect`, `webhooks`)": [
@@ -69,6 +59,10 @@ FEATURES: Dict[str, List[str]] = {
     "Webhooks (Top-level `webhooks` map)": ["webhook"],
 }
 
+_SUPPORTED_STAT_RE = re.compile(r"\b(?:full|supported|yes)\b")
+_PARTIAL_STAT_RE = re.compile(r"\b(?:partial|progress|planned)\b")
+_MISSING_STAT_RE = re.compile(r"\b(?:no|unsupported|missing|n/a)\b")
+
 
 def analyze_compliance(file_path: str) -> Dict[str, str]:
     """Analyze a toolchain's `COMPLIANCE.md` file to determine OAS 3.2.0 support.
@@ -96,7 +90,6 @@ def analyze_compliance(file_path: str) -> Dict[str, str]:
     if any(claim in lower_content for claim in full_compliance_claims):
         return dict.fromkeys(FEATURES, "✅ Supported")
 
-    nl = chr(10)
     lines = content.splitlines()
     in_table = False
     table_rows: List[Tuple[str, str]] = []
@@ -110,20 +103,13 @@ def analyze_compliance(file_path: str) -> Dict[str, str]:
             if len(parts) >= 2:
                 table_rows.append((parts[0].lower(), parts[-1].lower()))
 
-    supported_section = ""
-    pending_section = ""
+    supported_lines: List[str] = []
+    pending_lines: List[str] = []
     current_section = ""
     for line in lines:
         if line.startswith("##") or line.startswith("###"):
             header = line.lower()
-            if (
-                "supported" in header
-                or "implemented" in header
-                or "1." in header
-                or "2." in header
-                or "3." in header
-                or "4." in header
-            ):
+            if "supported" in header or "implemented" in header:
                 current_section = "supported"
             elif (
                 "unimplemented" in header
@@ -139,9 +125,12 @@ def analyze_compliance(file_path: str) -> Dict[str, str]:
                 current_section = "other"
 
         if current_section == "supported":
-            supported_section += line.lower() + nl
+            supported_lines.append(line.lower())
         elif current_section == "pending":
-            pending_section += line.lower() + nl
+            pending_lines.append(line.lower())
+
+    supported_section = chr(10).join(supported_lines)
+    pending_section = chr(10).join(pending_lines)
 
     for feat_name, keywords in FEATURES.items():
         status = "❓ Unknown"
@@ -149,25 +138,13 @@ def analyze_compliance(file_path: str) -> Dict[str, str]:
         if table_rows:
             for row_feat, row_stat in table_rows:
                 if any(kw in row_feat for kw in keywords):
-                    if "✅" in row_stat or "full" in row_stat or "supported" in row_stat or "yes" in row_stat:
+                    if "✅" in row_stat or _SUPPORTED_STAT_RE.search(row_stat):
                         status = "✅ Supported"
                         break
-                    if (
-                        "🚧" in row_stat
-                        or "⏳" in row_stat
-                        or "partial" in row_stat
-                        or "progress" in row_stat
-                        or "planned" in row_stat
-                    ):
+                    if "🚧" in row_stat or "⏳" in row_stat or _PARTIAL_STAT_RE.search(row_stat):
                         status = "🚧 Partial"
                         break
-                    if (
-                        "❌" in row_stat
-                        or "no" in row_stat
-                        or "unsupported" in row_stat
-                        or "missing" in row_stat
-                        or "n/a" in row_stat
-                    ):
+                    if "❌" in row_stat or _MISSING_STAT_RE.search(row_stat):
                         status = "❌ Missing"
                         break
 
@@ -205,7 +182,6 @@ def render_dashboard(root_dir: str = ".") -> str:
         comp_path = os.path.join(root_dir, tc, "COMPLIANCE.md")
         matrix[tc] = analyze_compliance(comp_path)
 
-    nl = chr(10)
     lines: List[str] = [
         "# CDD Ecosystem: OpenAPI 3.2.0 Compliance Dashboard",
         "",
@@ -290,7 +266,7 @@ def render_dashboard(root_dir: str = ".") -> str:
         ]
     )
 
-    return nl.join(lines)
+    return chr(10).join(lines)
 
 
 def generate_dashboard(
@@ -305,7 +281,12 @@ def generate_dashboard(
 
     Returns:
         str: The rendered Markdown content written to `output_file`.
+
+    Raises:
+        DashboardError: If `root_dir` does not exist.
     """
+    if not os.path.isdir(root_dir):
+        raise DashboardError(f"Root directory not found: {root_dir}")
     target_path = (
         output_file if output_file is not None else os.path.join(root_dir, "ECOSYSTEM_COMPLIANCE_OAS_3_2_0.md")
     )
@@ -324,10 +305,14 @@ def main(root_dir: Optional[str] = None, output_file: Optional[str] = None) -> i
         output_file: Optional output file path override.
 
     Returns:
-        int: Exit status code (0 on success).
+        int: Exit status code (0 on success, 1 on `DashboardError`).
     """
     resolved_root = root_dir if root_dir is not None else os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    generate_dashboard(resolved_root, output_file=output_file)
+    try:
+        generate_dashboard(resolved_root, output_file=output_file)
+    except DashboardError as exc:
+        print(exc.message, file=sys.stderr)
+        return exc.code
     return 0
 
 

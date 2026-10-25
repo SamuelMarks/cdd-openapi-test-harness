@@ -2,14 +2,20 @@
 
 import json
 from pathlib import Path
-from typing import Dict
 
+import pytest
+
+from harness.errors import JSONDict, SpecificationError
 from scripts import detect_conformance
 from scripts.detect_conformance import ConformanceDetector
 
 
-def _build_comprehensive_spec() -> Dict[str, object]:
-    """Build an exhaustive OpenAPI 3.2.0 specification exercising every object and field."""
+def _build_comprehensive_spec() -> JSONDict:
+    """Build an exhaustive OpenAPI 3.2.0 specification exercising every object and field.
+
+    Returns:
+        JSONDict: Complete OpenAPI 3.2.0 specification dictionary.
+    """
     return {
         "openapi": "3.2.0",
         "$self": "https://example.com/openapi.json",
@@ -238,7 +244,10 @@ def _build_comprehensive_spec() -> Dict[str, object]:
             "links": {"RefL": {"operationId": "listPets"}},
             "callbacks": {"RefCb": {"{$url}": {"get": {"summary": "cb"}}}},
             "pathItems": {"SharedPet": {"summary": "shared"}},
-            "mediaTypes": {"JsonMedia": {"example": 1}},
+            "mediaTypes": {
+                "JsonMedia": {"example": 1},
+                "RefMedia": {"$ref": "#/components/mediaTypes/JsonMedia"},
+            },
         },
         "security": [{"api_key": []}],
         "tags": [
@@ -296,7 +305,7 @@ def test_detector_full_spec_and_markdown_update(tmp_path: Path) -> None:
             "### `Schema Object`",
             "| Property | Type | Status / Notes |",
             "| :--- | :--- | :--- |",
-            "| `(Any property)` | any | [ ] |",
+            "| (Any property) | any | [ ] |",
             "| short |",
             "### Other Section",
             "| ignored |",
@@ -309,28 +318,36 @@ def test_detector_full_spec_and_markdown_update(tmp_path: Path) -> None:
 
     features_no_sec = features - {"OpenAPI Object", "Security Requirement Object", "Schema Object"}
     md_file.write_text(md_content, encoding="utf-8")
-    detect_conformance.update_markdown_matrix(md_file, features_no_sec)
+    assert detect_conformance.update_markdown_matrix(md_file, features_no_sec) is True
 
 
 def test_detector_edge_cases_and_non_dict_guards(tmp_path: Path) -> None:
-    """Verify all guard clauses, value mismatch branches, and fallback paths in `ConformanceDetector`."""
+    """Verify all guard clauses, recursive value mismatches, and fallback paths in `ConformanceDetector`."""
     det = ConformanceDetector()
 
     assert det._values_match(1, 1.0) is True
     assert det._values_match(True, 1) is False
     assert det._values_match("a", 1) is False
     assert det._values_match({"a": 1}, {}) is False
+    assert det._values_match({"a": 1}, {"a": 2}) is False
+    assert det._values_match({"a": {"nested": "ok"}}, {"a": {"nested": "wrong"}}) is False
     assert det._values_match([1], [1, 2]) is False
+    assert det._values_match(["a"], ["b"]) is False
+    assert det._values_match(["a"], ["a"]) is True
 
     assert det._check_ref("not-a-dict", {}) is False
     assert det._check_ref({"$ref": "#/a"}, "not-a-dict") is True
     assert det._check_ref({"$ref": "#/a"}, {"$ref": "#/b"}) is True
+    assert len(det.supported_features) == 0
 
-    det.walk_list("not-a-list", [], det.walk_tag)
-    det.walk_list(["not-a-dict", {"other": 1}], ["not-a-dict", {"other": 1}], det.walk_tag)
-    det.walk_list([{"name": "missing"}, {"other": 2}], ["not-a-dict"], det.walk_tag)
+    assert det.walk_list("not-a-list", [], det.walk_tag) is False
+    assert det.walk_list([], [], det.walk_tag) is True
+    assert det.walk_list(["not-a-dict", {"other": 1}], ["not-a-dict", {"other": 1}], det.walk_tag) is False
+    assert det.walk_list([{"name": "missing"}, {"other": 2}], ["not-a-dict"], det.walk_tag) is False
 
-    det.walk_dict("not-a-dict", {}, det.walk_tag)
+    assert det.walk_dict("not-a-dict", {}, det.walk_tag) is False
+    assert det.walk_dict({}, {}, det.walk_tag) is True
+    assert det.walk_dict({"a": {"name": "x"}, "missing": {"name": "z"}}, {"a": {"name": "y"}}, det.walk_tag) is False
 
     for fn in (
         det.walk_contact,
@@ -360,48 +377,60 @@ def test_detector_edge_cases_and_non_dict_guards(tmp_path: Path) -> None:
         det.walk_tag,
         det.walk_openapi_doc,
     ):
-        fn("not-a-dict", "not-a-dict")
-        fn({"a": 1}, {"a": 2})
+        assert fn("not-a-dict", "not-a-dict") is False
+        assert fn({"a": 1}, {"a": 2}) is False
+    assert len(det.supported_features) == 0
 
-    det.walk_schema(
-        {
-            "discriminator": {"propertyName": "x"},
-            "xml": {"name": "x"},
-            "properties": {"p": {"type": "string"}},
-            "items": {"type": "string"},
-            "additionalProperties": {"type": "string"},
-        },
-        {
-            "discriminator": "not-dict",
-            "xml": "not-dict",
-            "properties": "not-dict",
-            "items": "not-dict",
-            "additionalProperties": "not-dict",
-        },
+    assert (
+        det.walk_schema(
+            {
+                "discriminator": {"propertyName": "x", "mapping": {"dog": "#/Dog"}},
+                "xml": {"name": "x"},
+                "properties": {"p": {"type": "string"}},
+                "items": {"type": "string"},
+                "additionalProperties": {"type": "string"},
+                "allOf": [{"type": "string"}],
+            },
+            {
+                "discriminator": "not-dict",
+                "xml": "not-dict",
+                "properties": "not-dict",
+                "items": "not-dict",
+                "additionalProperties": "not-dict",
+                "allOf": [{"type": "integer"}],
+            },
+        )
+        is False
     )
-    det.walk_schema(
-        {
-            "discriminator": {"propertyName": "a"},
-            "xml": {"name": "a"},
-            "properties": {"missing_prop": {"type": "string"}},
-        },
-        {
-            "discriminator": {"propertyName": "b"},
-            "xml": {"name": "b"},
-            "properties": {},
-        },
+    assert (
+        det.walk_schema(
+            {
+                "discriminator": {"propertyName": "a", "mapping": {"dog": "#/Dog"}},
+                "xml": {"name": "a"},
+                "properties": {"missing_prop": {"type": "string"}},
+            },
+            {
+                "discriminator": {"propertyName": "b", "mapping": {"dog": "#/Wrong"}},
+                "xml": {"name": "b"},
+                "properties": {},
+            },
+        )
+        is False
     )
-    det.walk_schema(True, True)
-    det.walk_schema(True, False)
-    det.walk_schema({"a": 1}, {})
-    det.walk_schema({}, {"type": "object"})
+    assert det.walk_schema(True, False) is False
+    assert det.walk_schema({"type": "string"}, {}) is False
+    assert det.walk_schema({}, {"type": "object"}) is False
+    assert len(det.supported_features) == 0
 
-    det.walk_responses({"x-ext": {}, "404": {}}, {"200": {}})
-    det.walk_callback({"x-ext": {}, "{cb}": {}}, {})
-    det.walk_paths({"x-ext": {}, "/missing": {}}, {})
+    assert det.walk_schema(True, True) is True
+    assert det.walk_schema({}, {}) is True
+    assert "Schema Object" in det.supported_features
 
-    det.walk_operation({"security": [{"a": []}]}, {"security": "invalid"})
-    det.walk_openapi_doc({"security": [{"a": []}]}, {"security": "invalid"})
+    assert det.walk_responses({"x-ext": {}, "404": {}}, {"200": {}}) is False
+    assert det.walk_callback({"x-ext": {}, "{cb}": {}}, {}) is False
+    assert det.walk_paths({"x-ext": {}, "/missing": {}}, {}) is False
+    assert det.walk_operation({"security": [{"a": []}]}, {"security": "invalid"}) is False
+    assert det.walk_openapi_doc({"security": [{"a": []}]}, {"security": "invalid"}) is False
 
     yaml_file = tmp_path / "doc.yaml"
     yaml_file.write_text("openapi: 3.2.0", encoding="utf-8")
@@ -410,3 +439,11 @@ def test_detector_edge_cases_and_non_dict_guards(tmp_path: Path) -> None:
     list_file = tmp_path / "list.json"
     list_file.write_text("[1, 2]", encoding="utf-8")
     assert detect_conformance.load_doc(list_file) == {}
+
+    with pytest.raises(SpecificationError):
+        detect_conformance.load_doc(tmp_path / "missing_file.json")
+
+    bad_yaml = tmp_path / "bad.yaml"
+    bad_yaml.write_text("::: [unclosed", encoding="utf-8")
+    with pytest.raises(SpecificationError):
+        detect_conformance.load_doc(bad_yaml)

@@ -2,27 +2,61 @@
 
 Loads an original OpenAPI specification and a roundtripped output specification,
 then walks through both documents structurally to record which OpenAPI objects
-and fields were faithfully preserved (with value and structure verification).
-Optionally updates a markdown conformance matrix table.
+and properties were preserved accurately. Optionally updates a Markdown
+conformance checklist in-place.
 """
 
 import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Sequence, Set, Union
+from typing import Callable, Optional, Sequence, Set, Tuple, Union
 
 import yaml
 
-JSONDict = Dict[str, object]
-WalkerFn = Callable[[JSONDict, JSONDict], None]
+from harness.errors import ConformanceError, JSONDict, JSONValue, SpecificationError
+
+WalkerFn = Callable[[JSONValue, JSONValue], bool]
+
+SCHEMA_KEYWORDS: Tuple[str, ...] = (
+    "type",
+    "format",
+    "title",
+    "description",
+    "default",
+    "multipleOf",
+    "maximum",
+    "exclusiveMaximum",
+    "minimum",
+    "exclusiveMinimum",
+    "maxLength",
+    "minLength",
+    "pattern",
+    "maxItems",
+    "minItems",
+    "uniqueItems",
+    "maxProperties",
+    "minProperties",
+    "required",
+    "enum",
+    "const",
+    "$schema",
+    "$id",
+    "$anchor",
+    "$dynamicRef",
+    "$dynamicAnchor",
+    "readOnly",
+    "writeOnly",
+    "deprecated",
+    "examples",
+)
 
 
 class ConformanceDetector:
-    """Encapsulates state and structural comparison walkers for OpenAPI 3.2.0 conformance.
+    """Walks input and output OpenAPI ASTs to detect preserved OAS 3.2.0 features.
 
     Attributes:
-        supported_features: Set of `(Object, Property)` or `(Object,)` strings verified.
+        supported_features: Set of recorded feature identifiers (`Object` or `Object::property`).
     """
 
     def __init__(self) -> None:
@@ -36,270 +70,347 @@ class ConformanceDetector:
             obj: The OpenAPI specification object name (e.g., 'Info Object').
             prop: Optional field/property name within the object (e.g., 'title').
         """
+        self.supported_features.add(obj)
         if prop:
             self.supported_features.add(f"{obj}::{prop}")
-        else:
-            self.supported_features.add(obj)
 
     @staticmethod
-    def is_ref(node: object) -> bool:
-        """Check whether an AST node is a Reference Object containing `$ref`.
+    def is_ref(node: JSONValue) -> bool:
+        """Return whether a node is a JSON Reference object containing `$ref`.
 
         Args:
-            node: The parsed JSON/YAML node to check.
+            node: AST node to inspect.
 
         Returns:
-            bool: True if `node` is a dict containing `$ref`, False otherwise.
+            bool: True if `node` is a dict containing `'$ref'`.
         """
         return isinstance(node, dict) and "$ref" in node
 
     @staticmethod
-    def _values_match(in_val: object, out_val: object) -> bool:
-        """Verify that two scalar or collection values match semantically.
+    def _values_match(in_val: JSONValue, out_val: JSONValue) -> bool:
+        """Compare two specification values for recursive structural equivalence.
 
         Args:
-            in_val: Value from the input OpenAPI document.
-            out_val: Value from the roundtripped output OpenAPI document.
+            in_val: Value from the original input specification.
+            out_val: Value from the roundtripped output specification.
 
         Returns:
-            bool: True if the output value preserves the input value.
+            bool: True if the values match in type and recursive structure.
         """
+        if isinstance(in_val, bool) or isinstance(out_val, bool):
+            return type(in_val) is type(out_val) and in_val == out_val
+        if isinstance(in_val, (int, float)) and isinstance(out_val, (int, float)):
+            return in_val == out_val
         if type(in_val) is not type(out_val):
-            if isinstance(in_val, (int, float)) and isinstance(out_val, (int, float)):
-                if not isinstance(in_val, bool) and not isinstance(out_val, bool):
-                    return float(in_val) == float(out_val)
             return False
         if isinstance(in_val, dict) and isinstance(out_val, dict):
-            return bool(out_val) or not bool(in_val)
+            return all(k in out_val and ConformanceDetector._values_match(v, out_val[k]) for k, v in in_val.items())
         if isinstance(in_val, list) and isinstance(out_val, list):
-            return len(in_val) == len(out_val)
+            return len(in_val) == len(out_val) and all(
+                ConformanceDetector._values_match(a, b) for a, b in zip(in_val, out_val)
+            )
         return in_val == out_val
 
-    def _check_ref(self, in_node: object, out_node: object) -> bool:
-        """Check and record Reference Object conformance if `in_node` is a `$ref`.
+    def _check_ref(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Verify whether `in_node` is a Reference Object and record preserved fields.
 
         Args:
-            in_node: Node from the input specification.
-            out_node: Node from the output specification.
+            in_node: Input AST node.
+            out_node: Output AST node.
 
         Returns:
-            bool: True if `in_node` was a `$ref` (handled here), False otherwise.
+            bool: True if `in_node` is a Reference Object (handled here), False otherwise.
         """
         if not isinstance(in_node, dict) or not self.is_ref(in_node):
             return False
-        if isinstance(out_node, dict) and self.is_ref(out_node):
-            if in_node.get("$ref") == out_node.get("$ref"):
-                self.record("Reference Object")
-                self.record("Reference Object", "$ref")
-                for k in ("summary", "description"):
-                    if k in in_node and k in out_node and in_node[k] == out_node[k]:
-                        self.record("Reference Object", k)
+        if isinstance(out_node, dict) and self.is_ref(out_node) and in_node.get("$ref") == out_node.get("$ref"):
+            self.record("Reference Object", "$ref")
+            for k in ("summary", "description"):
+                if k in in_node and k in out_node and self._values_match(in_node[k], out_node[k]):
+                    self.record("Reference Object", k)
         return True
 
-    def walk_list(self, in_list: object, out_list: object, walk_fn: WalkerFn) -> None:
-        """Compare elements of two lists deterministically by key or index.
+    def walk_list(self, in_list: JSONValue, out_list: JSONValue, walk_fn: WalkerFn) -> bool:
+        """Walk two parallel lists of OpenAPI objects, matching by key or position.
 
         Args:
-            in_list: Input list from the original specification.
-            out_list: Output list from the roundtripped specification.
-            walk_fn: Comparison function to invoke on matched dictionary pairs.
+            in_list: Input list of AST nodes.
+            out_list: Output list of AST nodes.
+            walk_fn: Walker method to invoke on each matched element pair.
+
+        Returns:
+            bool: True if at least one element pair matched (or both lists are empty).
         """
         if not isinstance(in_list, list) or not isinstance(out_list, list):
-            return
-
-        for idx, in_item in enumerate(in_list):
-            if not isinstance(in_item, dict):
-                continue
-            matched_out: Optional[JSONDict] = None
-            for id_key in ("name", "url", "$ref"):
-                if id_key in in_item:
-                    for candidate in out_list:
-                        if isinstance(candidate, dict) and candidate.get(id_key) == in_item.get(id_key):
-                            matched_out = candidate
+            return False
+        if not in_list and not out_list:
+            return True
+        matched_any = False
+        for i, in_item in enumerate(in_list):
+            matched_out: JSONValue = None
+            if isinstance(in_item, dict):
+                for key in ("name", "url", "$ref"):
+                    if key in in_item:
+                        for out_item in out_list:
+                            if isinstance(out_item, dict) and out_item.get(key) == in_item[key]:
+                                matched_out = out_item
+                                break
+                        if matched_out is not None:
                             break
-                    break
-            if matched_out is None and idx < len(out_list):
-                candidate = out_list[idx]
-                if isinstance(candidate, dict):
-                    matched_out = candidate
-            if matched_out is not None:
-                walk_fn(in_item, matched_out)
+            if matched_out is None and i < len(out_list):
+                matched_out = out_list[i]
+            if matched_out is not None and walk_fn(in_item, matched_out):
+                matched_any = True
+        return matched_any
 
-    def walk_dict(self, in_dict: object, out_dict: object, walk_fn: WalkerFn) -> None:
-        """Compare corresponding keys of two dictionaries using `walk_fn`.
+    def walk_dict(self, in_dict: JSONValue, out_dict: JSONValue, walk_fn: WalkerFn) -> bool:
+        """Walk two parallel dictionaries of OpenAPI objects keyed by string identifier.
 
         Args:
-            in_dict: Input dictionary from the original specification.
-            out_dict: Output dictionary from the roundtripped specification.
-            walk_fn: Comparison function to invoke on each shared key's value.
+            in_dict: Input dictionary of AST nodes.
+            out_dict: Output dictionary of AST nodes.
+            walk_fn: Walker method to invoke on each shared key's value pair.
+
+        Returns:
+            bool: True if at least one entry matched (or both dicts are empty).
         """
         if not isinstance(in_dict, dict) or not isinstance(out_dict, dict):
-            return
-        for k, v in in_dict.items():
-            if k in out_dict and isinstance(v, dict) and isinstance(out_dict[k], dict):
-                walk_fn(v, out_dict[k])
+            return False
+        if not in_dict and not out_dict:
+            return True
+        matched_any = False
+        for k, in_val in in_dict.items():
+            if k in out_dict and walk_fn(in_val, out_dict[k]):
+                matched_any = True
+        return matched_any
 
-    def _check_scalar_props(
+    def _record_matching_scalars(
         self,
         obj_name: str,
         in_node: JSONDict,
         out_node: JSONDict,
-        props: Sequence[str],
+        keys: Tuple[str, ...],
     ) -> bool:
-        """Verify scalar/structural equality for `props` and record matching fields.
+        """Check and record scalar/collection properties that match between `in_node` and `out_node`.
 
         Args:
             obj_name: OpenAPI object name to record.
             in_node: Input object dictionary.
             out_node: Output object dictionary.
-            props: Property names to check.
+            keys: Property names to compare and record.
 
         Returns:
-            bool: True if at least one property matched or `in_node` was empty.
+            bool: True if at least one property matched.
         """
-        matched_any = not bool(in_node)
-        for k in props:
+        matched = False
+        for k in keys:
             if k in in_node and k in out_node and self._values_match(in_node[k], out_node[k]):
                 self.record(obj_name, k)
-                matched_any = True
-        return matched_any
+                matched = True
+        return matched
 
-    def walk_contact(self, in_node: object, out_node: object) -> None:
-        """Compare a Contact Object between input and output specs.
+    def walk_contact(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Walk a Contact Object.
 
         Args:
             in_node: Input Contact Object.
             out_node: Output Contact Object.
+
+        Returns:
+            bool: True if any Contact Object property matched.
         """
         if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
-        if self._check_scalar_props("Contact Object", in_node, out_node, ("name", "url", "email")):
-            self.record("Contact Object")
+            return False
+        return self._record_matching_scalars(
+            "Contact Object",
+            in_node,
+            out_node,
+            ("name", "url", "email"),
+        )
 
-    def walk_license(self, in_node: object, out_node: object) -> None:
-        """Compare a License Object between input and output specs.
+    def walk_license(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Walk a License Object.
 
         Args:
             in_node: Input License Object.
             out_node: Output License Object.
+
+        Returns:
+            bool: True if any License Object property matched.
         """
         if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
-        if self._check_scalar_props("License Object", in_node, out_node, ("name", "identifier", "url")):
-            self.record("License Object")
+            return False
+        return self._record_matching_scalars(
+            "License Object",
+            in_node,
+            out_node,
+            ("name", "identifier", "url"),
+        )
 
-    def walk_info(self, in_node: object, out_node: object) -> None:
-        """Compare an Info Object between input and output specs.
+    def walk_info(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Walk an Info Object.
 
         Args:
             in_node: Input Info Object.
             out_node: Output Info Object.
+
+        Returns:
+            bool: True if any Info Object property or child matched.
         """
         if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
-        matched = self._check_scalar_props(
+            return False
+        matched = self._record_matching_scalars(
             "Info Object",
             in_node,
             out_node,
             ("title", "summary", "description", "termsOfService", "version"),
         )
-        if "contact" in in_node and "contact" in out_node and isinstance(out_node["contact"], dict):
+        if (
+            "contact" in in_node
+            and "contact" in out_node
+            and self.walk_contact(in_node["contact"], out_node["contact"])
+        ):
             self.record("Info Object", "contact")
-            self.walk_contact(in_node["contact"], out_node["contact"])
             matched = True
-        if "license" in in_node and "license" in out_node and isinstance(out_node["license"], dict):
+        if (
+            "license" in in_node
+            and "license" in out_node
+            and self.walk_license(in_node["license"], out_node["license"])
+        ):
             self.record("Info Object", "license")
-            self.walk_license(in_node["license"], out_node["license"])
             matched = True
-        if matched:
-            self.record("Info Object")
+        return matched
 
-    def walk_server_var(self, in_node: object, out_node: object) -> None:
-        """Compare a Server Variable Object between input and output specs.
+    def walk_server_var(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Walk a Server Variable Object.
 
         Args:
             in_node: Input Server Variable Object.
             out_node: Output Server Variable Object.
+
+        Returns:
+            bool: True if any Server Variable Object property matched.
         """
         if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
-        if self._check_scalar_props("Server Variable Object", in_node, out_node, ("enum", "default", "description")):
-            self.record("Server Variable Object")
+            return False
+        return self._record_matching_scalars(
+            "Server Variable Object",
+            in_node,
+            out_node,
+            ("enum", "default", "description"),
+        )
 
-    def walk_server(self, in_node: object, out_node: object) -> None:
-        """Compare a Server Object between input and output specs.
+    def walk_server(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Walk a Server Object.
 
         Args:
             in_node: Input Server Object.
             out_node: Output Server Object.
+
+        Returns:
+            bool: True if any Server Object property matched.
         """
         if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
-        matched = self._check_scalar_props("Server Object", in_node, out_node, ("url", "description", "name"))
-        if "variables" in in_node and "variables" in out_node and isinstance(out_node["variables"], dict):
+            return False
+        matched = self._record_matching_scalars(
+            "Server Object",
+            in_node,
+            out_node,
+            ("url", "description", "name"),
+        )
+        if (
+            "variables" in in_node
+            and "variables" in out_node
+            and self.walk_dict(in_node["variables"], out_node["variables"], self.walk_server_var)
+        ):
             self.record("Server Object", "variables")
-            self.walk_dict(in_node["variables"], out_node["variables"], self.walk_server_var)
             matched = True
-        if matched:
-            self.record("Server Object")
+        return matched
 
-    def walk_external_docs(self, in_node: object, out_node: object) -> None:
-        """Compare an External Documentation Object between input and output specs.
+    def walk_external_docs(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Walk an External Documentation Object.
 
         Args:
             in_node: Input External Documentation Object.
             out_node: Output External Documentation Object.
+
+        Returns:
+            bool: True if any External Documentation Object property matched.
         """
         if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
-        if self._check_scalar_props("External Documentation Object", in_node, out_node, ("description", "url")):
-            self.record("External Documentation Object")
+            return False
+        return self._record_matching_scalars(
+            "External Documentation Object",
+            in_node,
+            out_node,
+            ("description", "url"),
+        )
 
-    def walk_schema(self, in_node: object, out_node: object) -> None:
-        """Compare a Schema Object (including Discriminator and XML) between specs.
+    def walk_schema(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Walk a Schema Object, including JSON Schema keywords, Discriminator, and XML.
 
         Args:
-            in_node: Input Schema Object.
-            out_node: Output Schema Object.
+            in_node: Input Schema Object or boolean schema.
+            out_node: Output Schema Object or boolean schema.
+
+        Returns:
+            bool: True if the Schema Object matched.
         """
-        if isinstance(in_node, bool) and isinstance(out_node, bool) and in_node == out_node:
-            self.record("Schema Object")
-            return
+        if isinstance(in_node, bool) and isinstance(out_node, bool):
+            if in_node == out_node:
+                self.record("Schema Object")
+                return True
+            return False
         if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
+            return False
         if self._check_ref(in_node, out_node):
-            return
+            return True
 
-        if out_node or not in_node:
+        if not in_node and not out_node:
             self.record("Schema Object")
+            return True
 
-        if "discriminator" in in_node and isinstance(in_node["discriminator"], dict):
-            disc_out = out_node.get("discriminator")
-            if isinstance(disc_out, dict):
-                self.record("Schema Object", "discriminator")
-                if self._check_scalar_props(
+        matched = self._record_matching_scalars("Schema Object", in_node, out_node, SCHEMA_KEYWORDS)
+
+        if "discriminator" in in_node and "discriminator" in out_node:
+            in_d = in_node["discriminator"]
+            out_d = out_node["discriminator"]
+            if (
+                isinstance(in_d, dict)
+                and isinstance(out_d, dict)
+                and self._record_matching_scalars(
                     "Discriminator Object",
-                    in_node["discriminator"],
-                    disc_out,
+                    in_d,
+                    out_d,
                     ("propertyName", "mapping", "defaultMapping"),
-                ):
-                    self.record("Discriminator Object")
+                )
+            ):
+                self.record("Schema Object", "discriminator")
+                matched = True
 
-        if "xml" in in_node and isinstance(in_node["xml"], dict):
-            xml_out = out_node.get("xml")
-            if isinstance(xml_out, dict):
-                self.record("Schema Object", "xml")
-                if self._check_scalar_props(
+        if "xml" in in_node and "xml" in out_node:
+            in_x = in_node["xml"]
+            out_x = out_node["xml"]
+            if (
+                isinstance(in_x, dict)
+                and isinstance(out_x, dict)
+                and self._record_matching_scalars(
                     "XML Object",
-                    in_node["xml"],
-                    xml_out,
+                    in_x,
+                    out_x,
                     ("name", "namespace", "prefix", "attribute", "wrapped", "nodeType"),
-                ):
-                    self.record("XML Object")
+                )
+            ):
+                self.record("Schema Object", "xml")
+                matched = True
 
-        if "externalDocs" in in_node and "externalDocs" in out_node:
+        if (
+            "externalDocs" in in_node
+            and "externalDocs" in out_node
+            and self.walk_external_docs(in_node["externalDocs"], out_node["externalDocs"])
+        ):
             self.record("Schema Object", "externalDocs")
-            self.walk_external_docs(in_node["externalDocs"], out_node["externalDocs"])
+            matched = True
 
         if (
             "example" in in_node
@@ -307,165 +418,223 @@ class ConformanceDetector:
             and self._values_match(in_node["example"], out_node["example"])
         ):
             self.record("Schema Object", "example")
+            matched = True
 
-        if "properties" in in_node and isinstance(in_node["properties"], dict):
-            props_out = out_node.get("properties")
-            if isinstance(props_out, dict):
-                for prop_k, prop_v in in_node["properties"].items():
-                    if prop_k in props_out:
-                        self.walk_schema(prop_v, props_out[prop_k])
+        if "properties" in in_node and "properties" in out_node:
+            in_props = in_node["properties"]
+            out_props = out_node["properties"]
+            if isinstance(in_props, dict) and isinstance(out_props, dict):
+                for prop_name, prop_schema in in_props.items():
+                    if prop_name in out_props and self.walk_schema(prop_schema, out_props[prop_name]):
+                        matched = True
 
-        if "items" in in_node and isinstance(in_node["items"], dict):
-            items_out = out_node.get("items")
-            if isinstance(items_out, dict):
-                self.walk_schema(in_node["items"], items_out)
+        if (
+            "items" in in_node
+            and "items" in out_node
+            and isinstance(in_node["items"], dict)
+            and isinstance(out_node["items"], dict)
+            and self.walk_schema(in_node["items"], out_node["items"])
+        ):
+            matched = True
 
         for comb in ("allOf", "anyOf", "oneOf"):
-            if comb in in_node and comb in out_node:
-                self.walk_list(in_node[comb], out_node[comb], self.walk_schema)
+            if comb in in_node and comb in out_node and self.walk_list(in_node[comb], out_node[comb], self.walk_schema):
+                matched = True
 
-        if "not" in in_node and "not" in out_node:
-            self.walk_schema(in_node["not"], out_node["not"])
+        if "not" in in_node and "not" in out_node and self.walk_schema(in_node["not"], out_node["not"]):
+            matched = True
 
-        if "additionalProperties" in in_node and isinstance(in_node["additionalProperties"], dict):
-            add_out = out_node.get("additionalProperties")
-            if isinstance(add_out, dict):
-                self.walk_schema(in_node["additionalProperties"], add_out)
+        if (
+            "additionalProperties" in in_node
+            and "additionalProperties" in out_node
+            and isinstance(in_node["additionalProperties"], (dict, bool))
+            and isinstance(out_node["additionalProperties"], (dict, bool))
+            and self.walk_schema(in_node["additionalProperties"], out_node["additionalProperties"])
+        ):
+            matched = True
 
-    def walk_example(self, in_node: object, out_node: object) -> None:
-        """Compare an Example Object between input and output specs.
+        if matched:
+            self.record("Schema Object")
+        return matched
+
+    def walk_example(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Walk an Example Object.
 
         Args:
             in_node: Input Example Object.
             out_node: Output Example Object.
+
+        Returns:
+            bool: True if any Example Object property matched.
         """
         if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
+            return False
         if self._check_ref(in_node, out_node):
-            return
-        if self._check_scalar_props(
+            return True
+        return self._record_matching_scalars(
             "Example Object",
             in_node,
             out_node,
             ("summary", "description", "value", "dataValue", "serializedValue", "externalValue"),
-        ):
-            self.record("Example Object")
+        )
 
-    def walk_header(self, in_node: object, out_node: object) -> None:
-        """Compare a Header Object between input and output specs.
+    def walk_header(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Walk a Header Object.
 
         Args:
             in_node: Input Header Object.
             out_node: Output Header Object.
+
+        Returns:
+            bool: True if any Header Object property matched.
         """
         if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
+            return False
         if self._check_ref(in_node, out_node):
-            return
-        matched = self._check_scalar_props(
+            return True
+        matched = self._record_matching_scalars(
             "Header Object",
             in_node,
             out_node,
             ("description", "required", "deprecated", "style", "explode", "example"),
         )
-        if "schema" in in_node and "schema" in out_node:
+        if "schema" in in_node and "schema" in out_node and self.walk_schema(in_node["schema"], out_node["schema"]):
             self.record("Header Object", "schema")
-            self.walk_schema(in_node["schema"], out_node["schema"])
             matched = True
-        if "examples" in in_node and "examples" in out_node:
+        if (
+            "examples" in in_node
+            and "examples" in out_node
+            and self.walk_dict(in_node["examples"], out_node["examples"], self.walk_example)
+        ):
             self.record("Header Object", "examples")
-            self.walk_dict(in_node["examples"], out_node["examples"], self.walk_example)
             matched = True
-        if "content" in in_node and "content" in out_node:
+        if (
+            "content" in in_node
+            and "content" in out_node
+            and self.walk_dict(in_node["content"], out_node["content"], self.walk_media_type)
+        ):
             self.record("Header Object", "content")
-            self.walk_dict(in_node["content"], out_node["content"], self.walk_media_type)
             matched = True
-        if matched:
-            self.record("Header Object")
+        return matched
 
-    def walk_encoding(self, in_node: object, out_node: object) -> None:
-        """Compare an Encoding Object between input and output specs.
+    def walk_encoding(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Walk an Encoding Object.
 
         Args:
             in_node: Input Encoding Object.
             out_node: Output Encoding Object.
+
+        Returns:
+            bool: True if any Encoding Object property matched.
         """
         if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
-        matched = self._check_scalar_props(
+            return False
+        matched = self._record_matching_scalars(
             "Encoding Object",
             in_node,
             out_node,
             ("contentType", "style", "explode", "allowReserved"),
         )
-        if "headers" in in_node and "headers" in out_node:
+        if (
+            "headers" in in_node
+            and "headers" in out_node
+            and self.walk_dict(in_node["headers"], out_node["headers"], self.walk_header)
+        ):
             self.record("Encoding Object", "headers")
-            self.walk_dict(in_node["headers"], out_node["headers"], self.walk_header)
             matched = True
-        if "encoding" in in_node and "encoding" in out_node:
+        if (
+            "encoding" in in_node
+            and "encoding" in out_node
+            and self.walk_dict(in_node["encoding"], out_node["encoding"], self.walk_encoding)
+        ):
             self.record("Encoding Object", "encoding")
-            self.walk_dict(in_node["encoding"], out_node["encoding"], self.walk_encoding)
             matched = True
-        if "prefixEncoding" in in_node and "prefixEncoding" in out_node:
+        if (
+            "prefixEncoding" in in_node
+            and "prefixEncoding" in out_node
+            and self.walk_list(in_node["prefixEncoding"], out_node["prefixEncoding"], self.walk_encoding)
+        ):
             self.record("Encoding Object", "prefixEncoding")
-            self.walk_list(in_node["prefixEncoding"], out_node["prefixEncoding"], self.walk_encoding)
             matched = True
-        if "itemEncoding" in in_node and "itemEncoding" in out_node:
+        if (
+            "itemEncoding" in in_node
+            and "itemEncoding" in out_node
+            and self.walk_encoding(in_node["itemEncoding"], out_node["itemEncoding"])
+        ):
             self.record("Encoding Object", "itemEncoding")
-            self.walk_encoding(in_node["itemEncoding"], out_node["itemEncoding"])
             matched = True
-        if matched:
-            self.record("Encoding Object")
+        return matched
 
-    def walk_media_type(self, in_node: object, out_node: object) -> None:
-        """Compare a Media Type Object between input and output specs.
+    def walk_media_type(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Walk a Media Type Object.
 
         Args:
             in_node: Input Media Type Object.
             out_node: Output Media Type Object.
+
+        Returns:
+            bool: True if any Media Type Object property matched.
         """
         if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
-        matched = self._check_scalar_props("Media Type Object", in_node, out_node, ("example",))
-        if "schema" in in_node and "schema" in out_node:
+            return False
+        if self._check_ref(in_node, out_node):
+            return True
+        matched = self._record_matching_scalars("Media Type Object", in_node, out_node, ("example",))
+        if "schema" in in_node and "schema" in out_node and self.walk_schema(in_node["schema"], out_node["schema"]):
             self.record("Media Type Object", "schema")
-            self.walk_schema(in_node["schema"], out_node["schema"])
             matched = True
-        if "itemSchema" in in_node and "itemSchema" in out_node:
+        if (
+            "itemSchema" in in_node
+            and "itemSchema" in out_node
+            and self.walk_schema(in_node["itemSchema"], out_node["itemSchema"])
+        ):
             self.record("Media Type Object", "itemSchema")
-            self.walk_schema(in_node["itemSchema"], out_node["itemSchema"])
             matched = True
-        if "examples" in in_node and "examples" in out_node:
+        if (
+            "examples" in in_node
+            and "examples" in out_node
+            and self.walk_dict(in_node["examples"], out_node["examples"], self.walk_example)
+        ):
             self.record("Media Type Object", "examples")
-            self.walk_dict(in_node["examples"], out_node["examples"], self.walk_example)
             matched = True
-        if "encoding" in in_node and "encoding" in out_node:
+        if (
+            "encoding" in in_node
+            and "encoding" in out_node
+            and self.walk_dict(in_node["encoding"], out_node["encoding"], self.walk_encoding)
+        ):
             self.record("Media Type Object", "encoding")
-            self.walk_dict(in_node["encoding"], out_node["encoding"], self.walk_encoding)
             matched = True
-        if "prefixEncoding" in in_node and "prefixEncoding" in out_node:
+        if (
+            "prefixEncoding" in in_node
+            and "prefixEncoding" in out_node
+            and self.walk_list(in_node["prefixEncoding"], out_node["prefixEncoding"], self.walk_encoding)
+        ):
             self.record("Media Type Object", "prefixEncoding")
-            self.walk_list(in_node["prefixEncoding"], out_node["prefixEncoding"], self.walk_encoding)
             matched = True
-        if "itemEncoding" in in_node and "itemEncoding" in out_node:
+        if (
+            "itemEncoding" in in_node
+            and "itemEncoding" in out_node
+            and self.walk_encoding(in_node["itemEncoding"], out_node["itemEncoding"])
+        ):
             self.record("Media Type Object", "itemEncoding")
-            self.walk_encoding(in_node["itemEncoding"], out_node["itemEncoding"])
             matched = True
-        if matched:
-            self.record("Media Type Object")
+        return matched
 
-    def walk_parameter(self, in_node: object, out_node: object) -> None:
-        """Compare a Parameter Object between input and output specs.
+    def walk_parameter(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Walk a Parameter Object.
 
         Args:
             in_node: Input Parameter Object.
             out_node: Output Parameter Object.
+
+        Returns:
+            bool: True if any Parameter Object property matched.
         """
         if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
+            return False
         if self._check_ref(in_node, out_node):
-            return
-        matched = self._check_scalar_props(
+            return True
+        matched = self._record_matching_scalars(
             "Parameter Object",
             in_node,
             out_node,
@@ -482,279 +651,359 @@ class ConformanceDetector:
                 "example",
             ),
         )
-        if "schema" in in_node and "schema" in out_node:
+        if "schema" in in_node and "schema" in out_node and self.walk_schema(in_node["schema"], out_node["schema"]):
             self.record("Parameter Object", "schema")
-            self.walk_schema(in_node["schema"], out_node["schema"])
             matched = True
-        if "examples" in in_node and "examples" in out_node:
+        if (
+            "examples" in in_node
+            and "examples" in out_node
+            and self.walk_dict(in_node["examples"], out_node["examples"], self.walk_example)
+        ):
             self.record("Parameter Object", "examples")
-            self.walk_dict(in_node["examples"], out_node["examples"], self.walk_example)
             matched = True
-        if "content" in in_node and "content" in out_node:
+        if (
+            "content" in in_node
+            and "content" in out_node
+            and self.walk_dict(in_node["content"], out_node["content"], self.walk_media_type)
+        ):
             self.record("Parameter Object", "content")
-            self.walk_dict(in_node["content"], out_node["content"], self.walk_media_type)
             matched = True
-        if matched:
-            self.record("Parameter Object")
+        return matched
 
-    def walk_request_body(self, in_node: object, out_node: object) -> None:
-        """Compare a Request Body Object between input and output specs.
+    def walk_request_body(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Walk a Request Body Object.
 
         Args:
             in_node: Input Request Body Object.
             out_node: Output Request Body Object.
+
+        Returns:
+            bool: True if any Request Body Object property matched.
         """
         if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
+            return False
         if self._check_ref(in_node, out_node):
-            return
-        matched = self._check_scalar_props("Request Body Object", in_node, out_node, ("description", "required"))
-        if "content" in in_node and "content" in out_node:
+            return True
+        matched = self._record_matching_scalars(
+            "Request Body Object",
+            in_node,
+            out_node,
+            ("description", "required"),
+        )
+        if (
+            "content" in in_node
+            and "content" in out_node
+            and self.walk_dict(in_node["content"], out_node["content"], self.walk_media_type)
+        ):
             self.record("Request Body Object", "content")
-            self.walk_dict(in_node["content"], out_node["content"], self.walk_media_type)
             matched = True
-        if matched:
-            self.record("Request Body Object")
+        return matched
 
-    def walk_link(self, in_node: object, out_node: object) -> None:
-        """Compare a Link Object between input and output specs.
+    def walk_link(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Walk a Link Object.
 
         Args:
             in_node: Input Link Object.
             out_node: Output Link Object.
+
+        Returns:
+            bool: True if any Link Object property matched.
         """
         if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
+            return False
         if self._check_ref(in_node, out_node):
-            return
-        matched = self._check_scalar_props(
+            return True
+        matched = self._record_matching_scalars(
             "Link Object",
             in_node,
             out_node,
             ("operationRef", "operationId", "parameters", "requestBody", "description"),
         )
-        if "server" in in_node and "server" in out_node:
+        if "server" in in_node and "server" in out_node and self.walk_server(in_node["server"], out_node["server"]):
             self.record("Link Object", "server")
-            self.walk_server(in_node["server"], out_node["server"])
             matched = True
-        if matched:
-            self.record("Link Object")
+        return matched
 
-    def walk_response(self, in_node: object, out_node: object) -> None:
-        """Compare a Response Object between input and output specs.
+    def walk_response(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Walk a Response Object.
 
         Args:
             in_node: Input Response Object.
             out_node: Output Response Object.
+
+        Returns:
+            bool: True if any Response Object property matched.
         """
         if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
+            return False
         if self._check_ref(in_node, out_node):
-            return
-        matched = self._check_scalar_props("Response Object", in_node, out_node, ("summary", "description"))
-        if "headers" in in_node and "headers" in out_node:
+            return True
+        matched = self._record_matching_scalars(
+            "Response Object",
+            in_node,
+            out_node,
+            ("summary", "description"),
+        )
+        if (
+            "headers" in in_node
+            and "headers" in out_node
+            and self.walk_dict(in_node["headers"], out_node["headers"], self.walk_header)
+        ):
             self.record("Response Object", "headers")
-            self.walk_dict(in_node["headers"], out_node["headers"], self.walk_header)
             matched = True
-        if "content" in in_node and "content" in out_node:
+        if (
+            "content" in in_node
+            and "content" in out_node
+            and self.walk_dict(in_node["content"], out_node["content"], self.walk_media_type)
+        ):
             self.record("Response Object", "content")
-            self.walk_dict(in_node["content"], out_node["content"], self.walk_media_type)
             matched = True
-        if "links" in in_node and "links" in out_node:
+        if (
+            "links" in in_node
+            and "links" in out_node
+            and self.walk_dict(in_node["links"], out_node["links"], self.walk_link)
+        ):
             self.record("Response Object", "links")
-            self.walk_dict(in_node["links"], out_node["links"], self.walk_link)
             matched = True
-        if matched:
-            self.record("Response Object")
+        return matched
 
-    def walk_responses(self, in_node: object, out_node: object) -> None:
-        """Compare a Responses Object between input and output specs.
+    def walk_responses(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Walk a Responses Object container.
 
         Args:
             in_node: Input Responses Object.
             out_node: Output Responses Object.
+
+        Returns:
+            bool: True if any status code or default response matched.
         """
         if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
+            return False
         matched = False
-        if "default" in in_node and "default" in out_node:
-            self.record("Responses Object", "default")
-            self.walk_response(in_node["default"], out_node["default"])
-            matched = True
-        for k, v in in_node.items():
-            if k != "default" and not str(k).startswith("x-") and k in out_node:
-                self.record("Responses Object", "{status-code}")
-                self.walk_response(v, out_node[k])
+        for code, resp in in_node.items():
+            if code.startswith("x-"):
+                continue
+            if code in out_node and self.walk_response(resp, out_node[code]):
+                if code == "default":
+                    self.record("Responses Object", "default")
+                else:
+                    self.record("Responses Object", "{statusCode}")
                 matched = True
-        if matched:
-            self.record("Responses Object")
+        return matched
 
-    def walk_callback(self, in_node: object, out_node: object) -> None:
-        """Compare a Callback Object between input and output specs.
+    def walk_callback(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Walk a Callback Object.
 
         Args:
             in_node: Input Callback Object.
             out_node: Output Callback Object.
+
+        Returns:
+            bool: True if any callback expression matched.
         """
         if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
+            return False
         if self._check_ref(in_node, out_node):
-            return
+            return True
         matched = False
-        for k, v in in_node.items():
-            if not str(k).startswith("x-") and k in out_node:
+        for expr, path_item in in_node.items():
+            if expr.startswith("x-"):
+                continue
+            if expr in out_node and self.walk_path_item(path_item, out_node[expr]):
                 self.record("Callback Object", "{expression}")
-                self.walk_path_item(v, out_node[k])
                 matched = True
-        if matched:
-            self.record("Callback Object")
+        return matched
 
-    def walk_operation(self, in_node: object, out_node: object) -> None:
-        """Compare an Operation Object between input and output specs.
+    def walk_operation(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Walk an Operation Object.
 
         Args:
             in_node: Input Operation Object.
             out_node: Output Operation Object.
+
+        Returns:
+            bool: True if any Operation Object property matched.
         """
         if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
-        matched = self._check_scalar_props(
+            return False
+        matched = self._record_matching_scalars(
             "Operation Object",
             in_node,
             out_node,
             ("tags", "summary", "description", "operationId", "deprecated"),
         )
-        if "externalDocs" in in_node and "externalDocs" in out_node:
+        if (
+            "externalDocs" in in_node
+            and "externalDocs" in out_node
+            and self.walk_external_docs(in_node["externalDocs"], out_node["externalDocs"])
+        ):
             self.record("Operation Object", "externalDocs")
-            self.walk_external_docs(in_node["externalDocs"], out_node["externalDocs"])
             matched = True
-        if "parameters" in in_node and "parameters" in out_node:
+        if (
+            "parameters" in in_node
+            and "parameters" in out_node
+            and self.walk_list(in_node["parameters"], out_node["parameters"], self.walk_parameter)
+        ):
             self.record("Operation Object", "parameters")
-            self.walk_list(in_node["parameters"], out_node["parameters"], self.walk_parameter)
             matched = True
-        if "requestBody" in in_node and "requestBody" in out_node:
+        if (
+            "requestBody" in in_node
+            and "requestBody" in out_node
+            and self.walk_request_body(in_node["requestBody"], out_node["requestBody"])
+        ):
             self.record("Operation Object", "requestBody")
-            self.walk_request_body(in_node["requestBody"], out_node["requestBody"])
             matched = True
-        if "responses" in in_node and "responses" in out_node:
+        if (
+            "responses" in in_node
+            and "responses" in out_node
+            and self.walk_responses(in_node["responses"], out_node["responses"])
+        ):
             self.record("Operation Object", "responses")
-            self.walk_responses(in_node["responses"], out_node["responses"])
             matched = True
-        if "callbacks" in in_node and "callbacks" in out_node:
+        if (
+            "callbacks" in in_node
+            and "callbacks" in out_node
+            and self.walk_dict(in_node["callbacks"], out_node["callbacks"], self.walk_callback)
+        ):
             self.record("Operation Object", "callbacks")
-            self.walk_dict(in_node["callbacks"], out_node["callbacks"], self.walk_callback)
             matched = True
-        if "security" in in_node and "security" in out_node:
-            if self._values_match(in_node["security"], out_node["security"]):
-                self.record("Operation Object", "security")
-                self.record("Security Requirement Object")
-                matched = True
-        if "servers" in in_node and "servers" in out_node:
+        if (
+            "security" in in_node
+            and "security" in out_node
+            and isinstance(out_node["security"], list)
+            and self._values_match(in_node["security"], out_node["security"])
+        ):
+            self.record("Operation Object", "security")
+            self.record("Security Requirement Object")
+            matched = True
+        if (
+            "servers" in in_node
+            and "servers" in out_node
+            and self.walk_list(in_node["servers"], out_node["servers"], self.walk_server)
+        ):
             self.record("Operation Object", "servers")
-            self.walk_list(in_node["servers"], out_node["servers"], self.walk_server)
             matched = True
-        if matched:
-            self.record("Operation Object")
+        return matched
 
-    def walk_path_item(self, in_node: object, out_node: object) -> None:
-        """Compare a Path Item Object between input and output specs.
+    def walk_path_item(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Walk a Path Item Object.
 
         Args:
             in_node: Input Path Item Object.
             out_node: Output Path Item Object.
+
+        Returns:
+            bool: True if any Path Item Object property or operation matched.
         """
         if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
-        matched = self._check_scalar_props("Path Item Object", in_node, out_node, ("$ref", "summary", "description"))
-        for m in ("get", "put", "post", "delete", "options", "head", "patch", "trace", "query"):
-            if m in in_node and m in out_node:
-                self.record("Path Item Object", m)
-                self.walk_operation(in_node[m], out_node[m])
+            return False
+        matched = self._record_matching_scalars(
+            "Path Item Object",
+            in_node,
+            out_node,
+            ("$ref", "summary", "description"),
+        )
+        for method in ("get", "put", "post", "delete", "options", "head", "patch", "trace", "query"):
+            if method in in_node and method in out_node and self.walk_operation(in_node[method], out_node[method]):
+                self.record("Path Item Object", method)
                 matched = True
-        if "additionalOperations" in in_node and "additionalOperations" in out_node:
+        if (
+            "additionalOperations" in in_node
+            and "additionalOperations" in out_node
+            and self.walk_dict(in_node["additionalOperations"], out_node["additionalOperations"], self.walk_operation)
+        ):
             self.record("Path Item Object", "additionalOperations")
-            self.walk_dict(
-                in_node["additionalOperations"],
-                out_node["additionalOperations"],
-                self.walk_operation,
-            )
             matched = True
-        if "servers" in in_node and "servers" in out_node:
+        if (
+            "servers" in in_node
+            and "servers" in out_node
+            and self.walk_list(in_node["servers"], out_node["servers"], self.walk_server)
+        ):
             self.record("Path Item Object", "servers")
-            self.walk_list(in_node["servers"], out_node["servers"], self.walk_server)
             matched = True
-        if "parameters" in in_node and "parameters" in out_node:
+        if (
+            "parameters" in in_node
+            and "parameters" in out_node
+            and self.walk_list(in_node["parameters"], out_node["parameters"], self.walk_parameter)
+        ):
             self.record("Path Item Object", "parameters")
-            self.walk_list(in_node["parameters"], out_node["parameters"], self.walk_parameter)
             matched = True
-        if matched:
-            self.record("Path Item Object")
+        return matched
 
-    def walk_paths(self, in_node: object, out_node: object) -> None:
-        """Compare a Paths Object between input and output specs.
+    def walk_paths(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Walk a Paths Object container.
 
         Args:
             in_node: Input Paths Object.
             out_node: Output Paths Object.
+
+        Returns:
+            bool: True if at least one path entry matched.
         """
         if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
+            return False
         matched = False
-        for k, v in in_node.items():
-            if not str(k).startswith("x-") and k in out_node:
-                self.record("Paths Object", "{path}")
-                self.walk_path_item(v, out_node[k])
+        for path, item in in_node.items():
+            if path.startswith("x-"):
+                continue
+            if path in out_node and self.walk_path_item(item, out_node[path]):
+                self.record("Paths Object", "/{path}")
                 matched = True
-        if matched:
-            self.record("Paths Object")
+        return matched
 
-    def walk_oauth_flow(self, in_node: object, out_node: object) -> None:
-        """Compare an OAuth Flow Object between input and output specs.
+    def walk_oauth_flow(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Walk an OAuth Flow Object.
 
         Args:
             in_node: Input OAuth Flow Object.
             out_node: Output OAuth Flow Object.
+
+        Returns:
+            bool: True if any OAuth Flow Object property matched.
         """
         if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
-        if self._check_scalar_props(
+            return False
+        return self._record_matching_scalars(
             "OAuth Flow Object",
             in_node,
             out_node,
             ("authorizationUrl", "deviceAuthorizationUrl", "tokenUrl", "refreshUrl", "scopes"),
-        ):
-            self.record("OAuth Flow Object")
+        )
 
-    def walk_oauth_flows(self, in_node: object, out_node: object) -> None:
-        """Compare an OAuth Flows Object between input and output specs.
+    def walk_oauth_flows(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Walk an OAuth Flows Object.
 
         Args:
             in_node: Input OAuth Flows Object.
             out_node: Output OAuth Flows Object.
+
+        Returns:
+            bool: True if any OAuth flow matched.
         """
         if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
+            return False
         matched = False
-        for k in ("implicit", "password", "clientCredentials", "authorizationCode", "deviceAuthorization"):
-            if k in in_node and k in out_node:
-                self.record("OAuth Flows Object", k)
-                self.walk_oauth_flow(in_node[k], out_node[k])
+        for flow in ("implicit", "password", "clientCredentials", "authorizationCode", "deviceAuthorization"):
+            if flow in in_node and flow in out_node and self.walk_oauth_flow(in_node[flow], out_node[flow]):
+                self.record("OAuth Flows Object", flow)
                 matched = True
-        if matched:
-            self.record("OAuth Flows Object")
+        return matched
 
-    def walk_security_scheme(self, in_node: object, out_node: object) -> None:
-        """Compare a Security Scheme Object between input and output specs.
+    def walk_security_scheme(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Walk a Security Scheme Object.
 
         Args:
             in_node: Input Security Scheme Object.
             out_node: Output Security Scheme Object.
+
+        Returns:
+            bool: True if any Security Scheme Object property matched.
         """
         if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
+            return False
         if self._check_ref(in_node, out_node):
-            return
-        matched = self._check_scalar_props(
+            return True
+        matched = self._record_matching_scalars(
             "Security Scheme Object",
             in_node,
             out_node,
@@ -770,23 +1019,24 @@ class ConformanceDetector:
                 "deprecated",
             ),
         )
-        if "flows" in in_node and "flows" in out_node:
+        if "flows" in in_node and "flows" in out_node and self.walk_oauth_flows(in_node["flows"], out_node["flows"]):
             self.record("Security Scheme Object", "flows")
-            self.walk_oauth_flows(in_node["flows"], out_node["flows"])
             matched = True
-        if matched:
-            self.record("Security Scheme Object")
+        return matched
 
-    def walk_components(self, in_node: object, out_node: object) -> None:
-        """Compare a Components Object between input and output specs.
+    def walk_components(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Walk a Components Object.
 
         Args:
             in_node: Input Components Object.
             out_node: Output Components Object.
+
+        Returns:
+            bool: True if any component collection matched.
         """
         if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
-        mapping: List[tuple[str, WalkerFn]] = [
+            return False
+        mapping: Tuple[Tuple[str, WalkerFn], ...] = (
             ("schemas", self.walk_schema),
             ("responses", self.walk_response),
             ("parameters", self.walk_parameter),
@@ -798,149 +1048,193 @@ class ConformanceDetector:
             ("callbacks", self.walk_callback),
             ("pathItems", self.walk_path_item),
             ("mediaTypes", self.walk_media_type),
-        ]
+        )
         matched = False
-        for k, fn in mapping:
-            if k in in_node and k in out_node and isinstance(out_node[k], dict):
-                self.record("Components Object", k)
-                self.walk_dict(in_node[k], out_node[k], fn)
+        for key, fn in mapping:
+            if key in in_node and key in out_node and self.walk_dict(in_node[key], out_node[key], fn):
+                self.record("Components Object", key)
                 matched = True
-        if matched:
-            self.record("Components Object")
+        return matched
 
-    def walk_tag(self, in_node: object, out_node: object) -> None:
-        """Compare a Tag Object between input and output specs.
+    def walk_tag(self, in_node: JSONValue, out_node: JSONValue) -> bool:
+        """Walk a Tag Object.
 
         Args:
             in_node: Input Tag Object.
             out_node: Output Tag Object.
+
+        Returns:
+            bool: True if any Tag Object property matched.
         """
         if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
-        matched = self._check_scalar_props(
-            "Tag Object", in_node, out_node, ("name", "summary", "description", "parent", "kind")
+            return False
+        matched = self._record_matching_scalars(
+            "Tag Object",
+            in_node,
+            out_node,
+            ("name", "summary", "description", "parent", "kind"),
         )
-        if "externalDocs" in in_node and "externalDocs" in out_node:
+        if (
+            "externalDocs" in in_node
+            and "externalDocs" in out_node
+            and self.walk_external_docs(in_node["externalDocs"], out_node["externalDocs"])
+        ):
             self.record("Tag Object", "externalDocs")
-            self.walk_external_docs(in_node["externalDocs"], out_node["externalDocs"])
             matched = True
-        if matched:
-            self.record("Tag Object")
+        return matched
 
-    def walk_openapi_doc(self, in_node: object, out_node: object) -> None:
-        """Compare a root OpenAPI Object between input and output specs.
+    def walk_openapi_doc(self, in_doc: JSONValue, out_doc: JSONValue) -> bool:
+        """Walk the root OpenAPI Object.
 
         Args:
-            in_node: Input OpenAPI root document.
-            out_node: Output OpenAPI root document.
+            in_doc: Parsed input OpenAPI document.
+            out_doc: Parsed output OpenAPI document.
+
+        Returns:
+            bool: True if any root OpenAPI Object property or child matched.
         """
-        if not isinstance(in_node, dict) or not isinstance(out_node, dict):
-            return
-        matched = self._check_scalar_props(
-            "OpenAPI Object", in_node, out_node, ("openapi", "$self", "jsonSchemaDialect")
+        if not isinstance(in_doc, dict) or not isinstance(out_doc, dict):
+            return False
+        matched = self._record_matching_scalars(
+            "OpenAPI Object",
+            in_doc,
+            out_doc,
+            ("openapi", "$self", "jsonSchemaDialect"),
         )
-        if "info" in in_node and "info" in out_node:
+        if "info" in in_doc and "info" in out_doc and self.walk_info(in_doc["info"], out_doc["info"]):
             self.record("OpenAPI Object", "info")
-            self.walk_info(in_node["info"], out_node["info"])
             matched = True
-        if "servers" in in_node and "servers" in out_node:
+        if (
+            "servers" in in_doc
+            and "servers" in out_doc
+            and self.walk_list(in_doc["servers"], out_doc["servers"], self.walk_server)
+        ):
             self.record("OpenAPI Object", "servers")
-            self.walk_list(in_node["servers"], out_node["servers"], self.walk_server)
             matched = True
-        if "paths" in in_node and "paths" in out_node:
+        if "paths" in in_doc and "paths" in out_doc and self.walk_paths(in_doc["paths"], out_doc["paths"]):
             self.record("OpenAPI Object", "paths")
-            self.walk_paths(in_node["paths"], out_node["paths"])
             matched = True
-        if "webhooks" in in_node and "webhooks" in out_node:
+        if (
+            "webhooks" in in_doc
+            and "webhooks" in out_doc
+            and self.walk_dict(in_doc["webhooks"], out_doc["webhooks"], self.walk_path_item)
+        ):
             self.record("OpenAPI Object", "webhooks")
-            self.walk_dict(in_node["webhooks"], out_node["webhooks"], self.walk_path_item)
             matched = True
-        if "components" in in_node and "components" in out_node:
+        if (
+            "components" in in_doc
+            and "components" in out_doc
+            and self.walk_components(in_doc["components"], out_doc["components"])
+        ):
             self.record("OpenAPI Object", "components")
-            self.walk_components(in_node["components"], out_node["components"])
             matched = True
-        if "security" in in_node and "security" in out_node:
-            if self._values_match(in_node["security"], out_node["security"]):
-                self.record("OpenAPI Object", "security")
-                self.record("Security Requirement Object")
-                matched = True
-        if "tags" in in_node and "tags" in out_node:
+        if (
+            "security" in in_doc
+            and "security" in out_doc
+            and isinstance(out_doc["security"], list)
+            and self._values_match(in_doc["security"], out_doc["security"])
+        ):
+            self.record("OpenAPI Object", "security")
+            self.record("Security Requirement Object")
+            matched = True
+        if "tags" in in_doc and "tags" in out_doc and self.walk_list(in_doc["tags"], out_doc["tags"], self.walk_tag):
             self.record("OpenAPI Object", "tags")
-            self.walk_list(in_node["tags"], out_node["tags"], self.walk_tag)
             matched = True
-        if "externalDocs" in in_node and "externalDocs" in out_node:
+        if (
+            "externalDocs" in in_doc
+            and "externalDocs" in out_doc
+            and self.walk_external_docs(in_doc["externalDocs"], out_doc["externalDocs"])
+        ):
             self.record("OpenAPI Object", "externalDocs")
-            self.walk_external_docs(in_node["externalDocs"], out_node["externalDocs"])
             matched = True
-        if matched:
-            self.record("OpenAPI Object")
+        return matched
 
 
-def load_doc(path: Union[str, Path]) -> JSONDict:
-    """Load an OpenAPI specification file in either JSON or YAML format.
+def load_doc(path: Path) -> JSONDict:
+    """Load a JSON or YAML OpenAPI specification document from disk.
 
     Args:
-        path: Path to the OpenAPI file.
+        path: Path to the JSON or YAML file.
 
     Returns:
-        JSONDict: Parsed OpenAPI specification dictionary.
+        JSONDict: Parsed dictionary, or empty dictionary if top-level is not a mapping.
+
+    Raises:
+        SpecificationError: If the file cannot be read or parsed as JSON/YAML.
     """
-    content = Path(path).read_text(encoding="utf-8")
+    try:
+        content = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise SpecificationError(str(path), str(exc)) from exc
+
+    loaded: JSONValue
     try:
         loaded = json.loads(content)
-    except Exception:
-        loaded = yaml.safe_load(content)
-    return loaded if isinstance(loaded, dict) else {}
+    except json.JSONDecodeError:
+        try:
+            loaded = yaml.safe_load(content)
+        except yaml.YAMLError as exc:
+            raise SpecificationError(str(path), str(exc)) from exc
+
+    if isinstance(loaded, dict):
+        return loaded
+    return {}
 
 
 def detect_features(input_spec: Union[str, Path], output_spec: Union[str, Path]) -> Set[str]:
-    """Compare an input specification against a roundtripped output specification.
+    """Compare two OpenAPI specification files and return the set of preserved features.
 
     Args:
-        input_spec: Path to the original input OpenAPI file.
-        output_spec: Path to the roundtripped output OpenAPI file.
+        input_spec: Path to the original input OpenAPI specification.
+        output_spec: Path to the roundtripped output OpenAPI specification.
 
     Returns:
-        Set[str]: Set of verified OpenAPI 3.2.0 feature strings.
+        Set[str]: Supported feature keys discovered during the AST walk.
     """
+    in_doc = load_doc(Path(input_spec))
+    out_doc = load_doc(Path(output_spec))
     detector = ConformanceDetector()
-    in_doc = load_doc(input_spec)
-    out_doc = load_doc(output_spec)
     detector.walk_openapi_doc(in_doc, out_doc)
     return detector.supported_features
 
 
 def update_markdown_matrix(md_path: Path, supported_features: Set[str]) -> bool:
-    """Update a conformance markdown table in-place with newly detected features.
+    """Update a Markdown conformance checklist in-place with `[x]` for supported features.
 
     Args:
-        md_path: Path to the markdown conformance file.
-        supported_features: Set of detected feature identifiers.
+        md_path: Path to the target Markdown checklist file.
+        supported_features: Set of supported feature identifiers.
 
     Returns:
-        bool: True if the markdown file existed and was updated, False otherwise.
+        bool: True on successful update.
+
+    Raises:
+        ConformanceError: If `md_path` does not exist on disk.
     """
     if not md_path.exists():
-        print(f"Markdown file not found: {md_path}", file=sys.stderr)
-        return False
+        print(f"Error: Markdown file {md_path} not found.", file=sys.stderr)
+        raise ConformanceError(f"Error: Markdown file {md_path} not found.")
 
     lines = md_path.read_text(encoding="utf-8").splitlines()
     current_obj: Optional[str] = None
 
     for i, line in enumerate(lines):
-        if line.startswith("### ") and "Object" in line:
-            parts = line.split("`")
-            if len(parts) >= 2:
-                current_obj = parts[1]
+        stripped = line.strip()
+        if stripped.startswith("### "):
+            header_text = stripped[4:].strip()
+            if header_text.startswith("`") and header_text.endswith("`"):
+                current_obj = header_text[1:-1]
+            elif "Object" in header_text:
+                current_obj = header_text
             else:
-                current_obj = line.replace("### ", "").strip()
-        elif line.startswith("### ") and "Object" not in line:
-            current_obj = None
+                current_obj = None
 
-        if current_obj and line.strip().startswith("|") and "Status / Notes" not in line and ":---" not in line:
-            cols = [c.strip() for c in line.split("|")]
-            if len(cols) >= 4:
-                prop_raw = cols[1].replace("`", "").strip()
+        elif current_obj and stripped.startswith("|") and stripped.endswith("|"):
+            cols = [c.strip() for c in stripped.split("|")[1:-1]]
+            if len(cols) >= 3 and cols[0] not in ("Property", ":---"):
+                prop_raw = cols[0]
+                if prop_raw.startswith("`") and prop_raw.endswith("`"):
+                    prop_raw = prop_raw[1:-1]
 
                 is_supported = False
                 if prop_raw == "(Object Node)":
@@ -974,7 +1268,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         argv: Optional command-line arguments (excluding script name).
 
     Returns:
-        int: Exit status code (0 on success, 1 on missing markdown file).
+        int: Exit status code (0 on success, 1 on missing markdown or specification error).
     """
     parser = argparse.ArgumentParser(description="Detect OpenAPI 3.2.0 conformance via roundtrip AST comparison.")
     parser.add_argument("input_spec", help="Path to original input OpenAPI spec (JSON/YAML)")
@@ -982,14 +1276,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--markdown", help="Path to markdown checklist to update in-place", default=None)
 
     args = parser.parse_args(list(argv) if argv is not None else None)
-    features = detect_features(args.input_spec, args.output_spec)
-
-    if args.markdown:
-        if not update_markdown_matrix(Path(args.markdown), features):
-            return 1
-    else:
-        for feature in sorted(features):
-            print(f"- {feature}")
+    try:
+        features = detect_features(args.input_spec, args.output_spec)
+        if args.markdown:
+            update_markdown_matrix(Path(args.markdown), features)
+        else:
+            for feature in sorted(features):
+                print(f"- {feature}")
+    except (ConformanceError, SpecificationError) as exc:
+        return exc.code
     return 0
 
 

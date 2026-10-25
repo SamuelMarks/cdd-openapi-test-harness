@@ -13,20 +13,20 @@ It is automatically synthesized from the individual `COMPLIANCE.md` trackers mai
 
 | OAS 3.2.0 Feature Area | `cdd-c` | `cdd-cpp` | `cdd-csharp` | `cdd-go` | `cdd-java` | `cdd-kotlin` | `cdd-php` | `cdd-python-all` | `cdd-ruby` | `cdd-rust` | `cdd-sh` | `cdd-swift` | `cdd-ts` |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Root (`$self`, `jsonSchemaDialect`, `webhooks`)** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Info (`summary`, `license.identifier`)** | ❌ | ✅ | ❌ | ❌ | ✅ | 🚧 | 🚧 | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
-| **Server (`name`, `variables`)** | 🚧 | ✅ | ✅ | ✅ | ✅ | ✅ | 🚧 | 🚧 | 🚧 | ✅ | ✅ | ✅ | 🚧 |
-| **Paths (`QUERY` method, `additionalOperations`)** | ❌ | ✅ | ❌ | 🚧 | ✅ | 🚧 | 🚧 | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ |
-| **Schema (JSON Schema 2020-12 / Dynamic Refs / `discriminator.defaultMapping`)** | 🚧 | ✅ | ✅ | 🚧 | ✅ | ✅ | ✅ | 🚧 | 🚧 | ✅ | ✅ | ✅ | 🚧 |
-| **Media Type (`itemSchema`, `prefixEncoding`, `itemEncoding`)** | ❌ | ✅ | ❌ | ❌ | ✅ | 🚧 | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
-| **Parameter (`example` / `examples` / `content`)** | 🚧 | ✅ | ✅ | 🚧 | ✅ | ✅ | 🚧 | 🚧 | 🚧 | ✅ | ✅ | ✅ | 🚧 |
-| **Response (`summary`, `headers`, `links`)** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Security (`oauth2MetadataUrl`, `deviceAuthorization`, `deprecated`)** | 🚧 | ✅ | ✅ | 🚧 | ✅ | ✅ | ✅ | 🚧 | 🚧 | ✅ | ✅ | ✅ | 🚧 |
-| **Tags (`summary`, `parent`, `kind`)** | ❌ | ✅ | 🚧 | 🚧 | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
-| **XML (`nodeType` replaces `attribute`/`wrapped`)** | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
-| **Example (`dataValue`, `serializedValue`)** | ❌ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
-| **Links / Callbacks (`$ref`, expressions)** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Webhooks (Top-level `webhooks` map)** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 🚧 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Root (`$self`, `jsonSchemaDialect`, `webhooks`)** | ✅ | ✅ | ✅ | ✅ | 🚧 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 🚧 | ✅ |
+| **Info (`summary`, `license.identifier`)** | ❌ | ✅ | ❌ | ❌ | ✅ | 🚧 | 🚧 | ❌ | ❌ | ❌ | ❌ | 🚧 | ❌ |
+| **Server (`name`, `variables`)** | 🚧 | ✅ | ✅ | ✅ | ✅ | ✅ | 🚧 | 🚧 | 🚧 | 🚧 | 🚧 | 🚧 | 🚧 |
+| **Paths (`QUERY` method, `additionalOperations`)** | ❌ | ✅ | ❌ | 🚧 | ✅ | 🚧 | 🚧 | ❌ | ❌ | ❌ | 🚧 | 🚧 | ❌ |
+| **Schema (JSON Schema 2020-12 / Dynamic Refs / `discriminator.defaultMapping`)** | 🚧 | ✅ | ✅ | 🚧 | ✅ | ✅ | ✅ | 🚧 | 🚧 | 🚧 | 🚧 | 🚧 | 🚧 |
+| **Media Type (`itemSchema`, `prefixEncoding`, `itemEncoding`)** | ❌ | ✅ | ❌ | ❌ | ✅ | 🚧 | ✅ | ❌ | ❌ | ❌ | ❌ | 🚧 | ❌ |
+| **Parameter (`example` / `examples` / `content`)** | 🚧 | ✅ | ✅ | 🚧 | ✅ | ✅ | 🚧 | 🚧 | 🚧 | 🚧 | 🚧 | 🚧 | 🚧 |
+| **Response (`summary`, `headers`, `links`)** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 🚧 | ✅ |
+| **Security (`oauth2MetadataUrl`, `deviceAuthorization`, `deprecated`)** | 🚧 | ✅ | ✅ | 🚧 | ✅ | ✅ | ✅ | 🚧 | 🚧 | 🚧 | 🚧 | 🚧 | 🚧 |
+| **Tags (`summary`, `parent`, `kind`)** | ❌ | ✅ | 🚧 | 🚧 | 🚧 | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | 🚧 | ❌ |
+| **XML (`nodeType` replaces `attribute`/`wrapped`)** | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | 🚧 | ❌ |
+| **Example (`dataValue`, `serializedValue`)** | ❌ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | 🚧 | ❌ |
+| **Links / Callbacks (`$ref`, expressions)** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 🚧 | ✅ |
+| **Webhooks (Top-level `webhooks` map)** | ✅ | ✅ | ✅ | ✅ | 🚧 | ✅ | 🚧 | ✅ | ✅ | ✅ | ✅ | 🚧 | ✅ |
 
 ## Toolchain Compliance Summaries
 
@@ -47,7 +47,7 @@ It is automatically synthesized from the individual `COMPLIANCE.md` trackers mai
 - **Overview**: `cdd-go` achieves 100% compliance with all major Swagger 2.0, OpenAPI 3.2.0, Arazzo 1.1.0, and Model Context Protocol (MCP 1.0.0) concepts.
 
 ### [`cdd-java`](./cdd-java/COMPLIANCE.md) — Java
-- **Scorecard**: 14/14 Supported (✅), 0/14 Partial (🚧), 0/14 Missing/Unmentioned (❌)
+- **Scorecard**: 11/14 Supported (✅), 3/14 Partial (🚧), 0/14 Missing/Unmentioned (❌)
 - **Overview**: `cdd-java` provides bidirectional compliance across **OpenAPI 3.2.0**, **Arazzo 1.1.0**, **Model Context Protocol (MCP) 1.0.0**, and **Swagger 2.0**.
 
 ### [`cdd-kotlin`](./cdd-kotlin/COMPLIANCE.md) — Kotlin (Multiplatform)
@@ -67,15 +67,15 @@ It is automatically synthesized from the individual `COMPLIANCE.md` trackers mai
 - **Overview**: `cdd-ruby` strives for full compliance with [Swagger 2.0 and OpenAPI 3.2.0](https://raw.githubusercontent.com/OAI/OpenAPI-Specification/refs/heads/main/versions/3.2.0.md).
 
 ### [`cdd-rust`](./cdd-rust/COMPLIANCE.md) — Rust
-- **Scorecard**: 8/14 Supported (✅), 0/14 Partial (🚧), 6/14 Missing/Unmentioned (❌)
+- **Scorecard**: 4/14 Supported (✅), 4/14 Partial (🚧), 6/14 Missing/Unmentioned (❌)
 - **Overview**: `cdd-rust` is fully compliant with the following standards:
 
-### [`cdd-sh`](./cdd-sh/COMPLIANCE.md) — Shell (`/bin/sh`)
-- **Scorecard**: 9/14 Supported (✅), 0/14 Partial (🚧), 5/14 Missing/Unmentioned (❌)
+### [`cdd-sh`](./cdd-sh/COMPLIANCE.md) — Shell (/bin/sh)
+- **Scorecard**: 4/14 Supported (✅), 5/14 Partial (🚧), 5/14 Missing/Unmentioned (❌)
 - **Overview**: `cdd-sh` targets the Swagger 2.0, OpenAPI 3.2.0, and Arazzo 1.1.0 specifications.
 
 ### [`cdd-swift`](./cdd-swift/COMPLIANCE.md) — Swift
-- **Scorecard**: 14/14 Supported (✅), 0/14 Partial (🚧), 0/14 Missing/Unmentioned (❌)
+- **Scorecard**: 0/14 Supported (✅), 14/14 Partial (🚧), 0/14 Missing/Unmentioned (❌)
 - **Overview**: `cdd-swift` implements bidirectional compilation across **OpenAPI 3.2.0**, **Swagger 2.0**, **Arazzo 1.1.0**, and the **Model Context Protocol (MCP 1.0.0)**.
 
 ### [`cdd-ts`](./cdd-ts/COMPLIANCE.md) — TypeScript

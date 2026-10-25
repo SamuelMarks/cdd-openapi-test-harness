@@ -11,6 +11,7 @@ import subprocess
 import sys
 from typing import Optional
 
+from harness.errors import DashboardError
 from harness.registry import get_toolchain
 
 
@@ -62,21 +63,23 @@ def _determine_wasm_status(root_dir: str, repo_name: str) -> str:
     return "✅ Yes"
 
 
-def main(root_dir: Optional[str] = None) -> int:
+def update_testing_coverage_table(root_dir: str, stage: bool = False) -> bool:
     """Parse `README.md`, check native and WASM support, and update the 'Testing Coverage' table.
 
     Args:
-        root_dir: Optional repository root directory override.
+        root_dir: Repository root directory containing `README.md`.
+        stage: Whether to run `git add` on `README.md` if modified. Defaults to False.
 
     Returns:
-        int: Exit status code (0 on success, 1 if `README.md` or the coverage table is missing).
+        bool: True if `README.md` was modified, False if already up to date.
+
+    Raises:
+        DashboardError: If `README.md` or the Testing Coverage table is missing.
     """
-    resolved_root = root_dir if root_dir is not None else os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    readme_path = os.path.join(resolved_root, "README.md")
+    readme_path = os.path.join(root_dir, "README.md")
 
     if not os.path.exists(readme_path):
-        print("README.md not found", file=sys.stderr)
-        return 1
+        raise DashboardError("README.md not found")
 
     with open(readme_path, encoding="utf-8") as f:
         lines = f.readlines()
@@ -91,14 +94,14 @@ def main(root_dir: Optional[str] = None) -> int:
             break
 
     if start_idx == -1:
-        print("Could not find Testing Coverage table in README.md", file=sys.stderr)
-        return 1
+        raise DashboardError("Could not find Testing Coverage table in README.md")
 
     if end_idx == -1:
         end_idx = len(lines)
 
     print("Updating Testing Coverage table in README.md...")
     changed = False
+    nl = chr(10)
 
     for i in range(start_idx, end_idx):
         line = lines[i]
@@ -109,10 +112,9 @@ def main(root_dir: Optional[str] = None) -> int:
         repo_col = parts[1]
         repo_name = repo_col.strip("` ")
 
-        native_status = _determine_native_status(resolved_root, repo_name)
-        wasm_status = _determine_wasm_status(resolved_root, repo_name)
+        native_status = _determine_native_status(root_dir, repo_name)
+        wasm_status = _determine_wasm_status(root_dir, repo_name)
 
-        nl = chr(10)
         new_line = f"| `{repo_name}` | {native_status} | {wasm_status} |{nl}"
         if lines[i] != new_line:
             lines[i] = new_line
@@ -122,9 +124,29 @@ def main(root_dir: Optional[str] = None) -> int:
         with open(readme_path, "w", encoding="utf-8") as f:
             f.writelines(lines)
         print("README.md Testing Coverage table has been updated.")
-        subprocess.run(["git", "add", readme_path], cwd=resolved_root, check=False)
+        if stage:
+            subprocess.run(["git", "add", readme_path], cwd=root_dir, check=False)
     else:
         print("Testing Coverage table is already up to date.")
+    return changed
+
+
+def main(root_dir: Optional[str] = None, stage: bool = False) -> int:
+    """CLI entrypoint for `update_testing_coverage.py`.
+
+    Args:
+        root_dir: Optional repository root directory override.
+        stage: Whether to stage modified `README.md` with `git add`.
+
+    Returns:
+        int: Exit status code (0 on success, 1 if `README.md` or the coverage table is missing).
+    """
+    resolved_root = root_dir if root_dir is not None else os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    try:
+        update_testing_coverage_table(resolved_root, stage=stage)
+    except DashboardError as exc:
+        print(exc.message, file=sys.stderr)
+        return exc.code
     return 0
 
 

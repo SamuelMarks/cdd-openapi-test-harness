@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """Script: build_cdd.py.
 
-Installs dependencies and builds the cdd-ts package.
+Installs dependencies and builds the cdd-ts package via the unified harness registry.
 Usage: python build_cdd.py
 """
 
-import os
-import subprocess
 import sys
 
 from harness.errors import DirectoryMissingError
+from harness.registry import build_typescript_toolchain
 
 
 def build_cdd_ts(target_dir: str = "cdd-ts") -> None:
@@ -22,20 +21,7 @@ def build_cdd_ts(target_dir: str = "cdd-ts") -> None:
         DirectoryMissingError: If the target directory does not exist.
         subprocess.CalledProcessError: If npm install or build fails.
     """
-    prev_dir = os.getcwd()
-    try:
-        os.chdir(target_dir)
-    except FileNotFoundError as exc:
-        raise DirectoryMissingError(target_dir) from exc
-
-    try:
-        print("Installing dependencies...")
-        subprocess.run(["npm", "i"], check=True)
-
-        print("Building cdd-ts...")
-        subprocess.run(["npm", "run", "build"], check=True)
-    finally:
-        os.chdir(prev_dir)
+    build_typescript_toolchain(target_dir)
 
 
 def main() -> None:

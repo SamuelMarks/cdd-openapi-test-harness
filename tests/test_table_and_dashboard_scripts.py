@@ -1,10 +1,10 @@
 """Unit tests for `generate_dashboard.py`, `update_all_tables.py`, `update_readme_status.py`, and `update_testing_coverage.py`."""
 
+import shutil
 import subprocess
+import unittest.mock as mock
 from pathlib import Path
-from typing import List
-
-import pytest
+from typing import Dict, List, Optional
 
 from scripts import (
     generate_dashboard,
@@ -16,6 +16,8 @@ from scripts import (
 
 def test_generate_dashboard_all_branches(tmp_path: Path) -> None:
     """Verify `analyze_compliance`, `render_dashboard`, `generate_dashboard`, and `main`."""
+    assert generate_dashboard.main(root_dir=str(tmp_path / "nonexistent")) == 1
+
     missing_res = generate_dashboard.analyze_compliance(str(tmp_path / "missing.md"))
     assert all(v == "❓ Missing Docs" for v in missing_res.values())
 
@@ -83,52 +85,109 @@ def test_generate_dashboard_all_branches(tmp_path: Path) -> None:
     assert "Overview paragraph here." in content
 
 
-def test_update_all_tables(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_update_all_tables(tmp_path: Path) -> None:
     """Verify `update_all_tables.main` handles success and non-zero return codes."""
-    monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0))
-    assert update_all_tables.main(root_dir=str(tmp_path)) == 0
+    with mock.patch("subprocess.run", side_effect=lambda cmd, **_kw: subprocess.CompletedProcess(cmd, 0)):
+        assert update_all_tables.main(root_dir=str(tmp_path)) == 0
 
-    monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 2))
-    assert update_all_tables.main(root_dir=str(tmp_path)) == 2
+    with mock.patch("subprocess.run", side_effect=lambda cmd, **_kw: subprocess.CompletedProcess(cmd, 2)):
+        assert update_all_tables.main(root_dir=str(tmp_path)) == 1
 
     calls = [0]
 
-    def fail_second(cmd: List[str], **kw: object) -> subprocess.CompletedProcess[str]:
+    def fail_second(cmd: List[str], check: bool = False) -> subprocess.CompletedProcess[str]:
         """Pass first subprocess call, fail second."""
+        assert check is False
         calls[0] += 1
         return subprocess.CompletedProcess(cmd, 0 if calls[0] == 1 else 3)
 
-    monkeypatch.setattr(subprocess, "run", fail_second)
-    assert update_all_tables.main(root_dir=str(tmp_path)) == 3
+    with mock.patch("subprocess.run", side_effect=fail_second):
+        assert update_all_tables.main(root_dir=str(tmp_path)) == 1
 
 
-def test_update_readme_status(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify `update_readme_status.run_test` and `main` across all branches."""
-    monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0))
-    assert update_readme_status.run_test("cdd-ts", "only-test", root_dir=str(tmp_path)) == "✅ Passed"
+def test_update_readme_status_and_real_readme(tmp_path: Path) -> None:
+    """Verify `update_readme_status` against 4-col real `README.md`, 5-col table, and error paths."""
 
-    monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1))
-    assert update_readme_status.run_test("cdd-ts", "", root_dir=str(tmp_path)) == "❌ Failed"
+    def fake_sub_ok(
+        cmd: List[str],
+        env: Optional[Dict[str, str]] = None,
+        cwd: Optional[str] = None,
+        stdout: Optional[int] = None,
+        stderr: Optional[int] = None,
+        timeout: Optional[int] = None,
+        check: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
+        """Return exit code 0."""
+        assert check is False
+        assert env is None or "ONLY_TEST" in env
+        assert cwd is None or isinstance(cwd, str)
+        assert stdout in (None, subprocess.DEVNULL)
+        assert stderr in (None, subprocess.DEVNULL)
+        assert timeout in (None, 300)
+        return subprocess.CompletedProcess(cmd, 0)
 
-    def raise_timeout(cmd: List[str], **kw: object) -> subprocess.CompletedProcess[str]:
+    with mock.patch("subprocess.run", side_effect=fake_sub_ok):
+        assert update_readme_status.run_test("cdd-ts", "only-test", root_dir=str(tmp_path)) == "✅ Passed"
+
+    with mock.patch(
+        "subprocess.run",
+        side_effect=lambda cmd, **_kw: subprocess.CompletedProcess(cmd, 1),
+    ):
+        assert update_readme_status.run_test("cdd-ts", "", root_dir=str(tmp_path)) == "❌ Failed"
+
+    def raise_timeout(
+        cmd: List[str],
+        env: Optional[Dict[str, str]] = None,
+        cwd: Optional[str] = None,
+        stdout: Optional[int] = None,
+        stderr: Optional[int] = None,
+        timeout: Optional[int] = None,
+        check: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
         """Raise TimeoutExpired."""
+        assert check is False
+        assert env is not None
+        assert cwd is None
+        assert stdout == subprocess.DEVNULL
+        assert stderr == subprocess.DEVNULL
+        assert timeout == 300
         raise subprocess.TimeoutExpired(cmd, 300)
 
-    monkeypatch.setattr(subprocess, "run", raise_timeout)
-    assert update_readme_status.run_test("cdd-ts") == "❌ Timeout"
+    with mock.patch("subprocess.run", side_effect=raise_timeout):
+        assert update_readme_status.run_test("cdd-ts") == "❌ Timeout"
 
-    def raise_err(cmd: List[str], **kw: object) -> subprocess.CompletedProcess[str]:
+    def raise_err(
+        _cmd: List[str],
+        env: Optional[Dict[str, str]] = None,
+        cwd: Optional[str] = None,
+        stdout: Optional[int] = None,
+        stderr: Optional[int] = None,
+        timeout: Optional[int] = None,
+        check: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
         """Raise OSError."""
+        assert check is False
+        assert env is not None
+        assert cwd is None
+        assert stdout == subprocess.DEVNULL
+        assert stderr == subprocess.DEVNULL
+        assert timeout == 300
         raise OSError("err")
 
-    monkeypatch.setattr(subprocess, "run", raise_err)
-    assert update_readme_status.run_test("cdd-ts") == "❌ Error"
+    with mock.patch("subprocess.run", side_effect=raise_err):
+        assert update_readme_status.run_test("cdd-ts") == "❌ Error"
 
     assert update_readme_status.main(root_dir=str(tmp_path)) == 1
 
     readme = tmp_path / "README.md"
     readme.write_text("# No Table Here", encoding="utf-8")
     assert update_readme_status.main(root_dir=str(tmp_path)) == 1
+
+    real_readme_src = Path(__file__).resolve().parent.parent / "README.md"
+    shutil.copyfile(real_readme_src, readme)
+    with mock.patch("scripts.update_readme_status.run_test", return_value="✅ Passed"):
+        assert update_readme_status.main(root_dir=str(tmp_path)) == 0
+    assert "| `cdd-c` | `client` | ✅ Passed | ✅ Passed |" in readme.read_text(encoding="utf-8")
 
     nl = chr(10)
     table_lines = [
@@ -142,27 +201,27 @@ def test_update_readme_status(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     ]
     readme.write_text(nl.join(table_lines) + nl, encoding="utf-8")
 
-    monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0))
-    monkeypatch.setattr(
-        update_readme_status,
-        "run_test",
-        lambda repo, mode="", root_dir=None: "❌ Failed" if mode == "" else "✅ Passed",
-    )
-    assert update_readme_status.main(root_dir=str(tmp_path)) == 0
-    assert "✅ Passed (WASM ❌)" in readme.read_text(encoding="utf-8")
-
-    assert update_readme_status.main(root_dir=str(tmp_path)) == 0
+    with (
+        mock.patch("subprocess.run", side_effect=fake_sub_ok),
+        mock.patch(
+            "scripts.update_readme_status.run_test",
+            side_effect=lambda _repo, mode="", **_kw: "❌ Failed" if mode == "" else "✅ Passed",
+        ),
+    ):
+        assert update_readme_status.main(root_dir=str(tmp_path), stage=True) == 0
+        assert "✅ Passed (WASM ❌)" in readme.read_text(encoding="utf-8")
+        assert update_readme_status.main(root_dir=str(tmp_path)) == 0
 
     readme_eof = nl.join(table_lines[:4]) + nl
     readme.write_text(readme_eof, encoding="utf-8")
-    monkeypatch.setattr(update_readme_status, "run_test", lambda repo, mode="", root_dir=None: "✅ Passed")
-    assert update_readme_status.main(root_dir=str(tmp_path)) == 0
+    with mock.patch("scripts.update_readme_status.run_test", return_value="✅ Passed"):
+        assert update_readme_status.main(root_dir=str(tmp_path)) == 0
 
-    monkeypatch.setattr(update_readme_status, "run_test", lambda repo, mode="", root_dir=None: "❌ Failed")
-    assert update_readme_status.main(root_dir=str(tmp_path)) == 0
+    with mock.patch("scripts.update_readme_status.run_test", return_value="❌ Failed"):
+        assert update_readme_status.main(root_dir=str(tmp_path)) == 0
 
 
-def test_update_testing_coverage(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_update_testing_coverage(tmp_path: Path) -> None:
     """Verify `update_testing_coverage` helper functions and `main` across all branches."""
     assert update_testing_coverage._determine_native_status(str(tmp_path), "cdd-ts") == "❌ No"
     (tmp_path / "cdd-ts").mkdir()
@@ -200,8 +259,8 @@ def test_update_testing_coverage(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         "End",
     ]
     readme.write_text(nl.join(cov_lines) + nl, encoding="utf-8")
-    monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0))
-    assert update_testing_coverage.main(root_dir=str(tmp_path)) == 0
+    with mock.patch("subprocess.run", side_effect=lambda cmd, **_kw: subprocess.CompletedProcess(cmd, 0)):
+        assert update_testing_coverage.main(root_dir=str(tmp_path), stage=True) == 0
     assert "| `cdd-ts` | ✅ Yes | ✅ Yes |" in readme.read_text(encoding="utf-8")
 
     assert update_testing_coverage.main(root_dir=str(tmp_path)) == 0

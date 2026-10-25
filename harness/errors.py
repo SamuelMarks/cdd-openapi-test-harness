@@ -1,10 +1,16 @@
-"""Unified error hierarchy for the CDD OpenAPI test harness.
+"""Unified error hierarchy and core JSON types for the CDD OpenAPI test harness.
 
 Defines a single structured exception hierarchy replacing ad-hoc `sys.exit`
-and bare `Exception` handlers across the codebase.
+and bare `Exception` handlers across the codebase, along with recursive JSON
+type aliases avoiding `object` and `Any`.
 """
 
-from typing import List, Optional
+from typing import Dict, List, Optional, Sequence, Union
+
+JSONScalar = Union[str, int, float, bool, None]
+JSONValue = Union[JSONScalar, Dict[str, "JSONValue"], List["JSONValue"]]
+JSONDict = Dict[str, JSONValue]
+JSONList = List[JSONValue]
 
 
 class HarnessError(Exception):
@@ -39,7 +45,7 @@ class CommandExecutionError(HarnessError):
 
     def __init__(
         self,
-        cmd: List[str],
+        cmd: Sequence[str],
         returncode: int,
         stdout: Optional[str] = None,
         stderr: Optional[str] = None,
@@ -47,14 +53,15 @@ class CommandExecutionError(HarnessError):
         """Initialize a CommandExecutionError.
 
         Args:
-            cmd: The command list that was executed.
+            cmd: The command sequence that was executed.
             returncode: The non-zero exit code returned by the command.
             stdout: Optional captured standard output from the command.
             stderr: Optional captured standard error from the command.
         """
-        message = f"Command '{' '.join(cmd)}' failed with exit code {returncode}"
+        cmd_list = list(cmd)
+        message = f"Command '{' '.join(cmd_list)}' failed with exit code {returncode}"
         super().__init__(message, code=returncode if returncode != 0 else 1)
-        self.cmd: List[str] = list(cmd)
+        self.cmd: List[str] = cmd_list
         self.returncode: int = returncode
         self.stdout: Optional[str] = stdout
         self.stderr: Optional[str] = stderr
@@ -82,6 +89,7 @@ class SpecificationError(HarnessError):
 
     Attributes:
         spec_path: Path to the specification file that caused the error.
+        reason: Explanation of why the specification failed to load or validate.
     """
 
     def __init__(self, spec_path: str, reason: str) -> None:
@@ -103,15 +111,16 @@ class CoverageValidationError(HarnessError):
         unhit_endpoints: List of formatted `METHOD /path` strings not exercised.
     """
 
-    def __init__(self, unhit_endpoints: List[str]) -> None:
+    def __init__(self, unhit_endpoints: Sequence[str]) -> None:
         """Initialize a CoverageValidationError.
 
         Args:
-            unhit_endpoints: List of endpoints that were not hit during testing.
+            unhit_endpoints: Sequence of endpoints that were not hit during testing.
         """
-        joined = ", ".join(unhit_endpoints)
+        endpoint_list = list(unhit_endpoints)
+        joined = ", ".join(endpoint_list)
         super().__init__(f"Coverage validation failed for endpoints: {joined}", code=1)
-        self.unhit_endpoints: List[str] = list(unhit_endpoints)
+        self.unhit_endpoints: List[str] = endpoint_list
 
 
 class AuditFailureError(HarnessError):
@@ -120,6 +129,7 @@ class AuditFailureError(HarnessError):
     Attributes:
         toolchain: Name of the toolchain under audit.
         phase: Name of the audit phase ('happy_path', 'coverage', 'status_500', 'invalid_schema').
+        details: Detailed message describing the audit failure.
     """
 
     def __init__(self, toolchain: str, phase: str, details: str) -> None:
