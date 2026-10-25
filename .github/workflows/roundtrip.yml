@@ -434,8 +434,6 @@ jobs:
         run: |
           set -e
           cd cdd-ruby
-          sed -i "s/spec.license = 'MIT OR Apache-2.0'/spec.licenses = ['MIT', 'Apache-2.0']/" cdd-ruby.gemspec
-          sed -i "s/gem 'minitest', '~> 6.0'/gem 'minitest', '>= 5.0'/" Gemfile
           rm -f Gemfile.lock
           bundle install
           for file in ../OAI-OpenAPI-Specification/_archive_/schemas/v3.0/pass/*.yaml; do
@@ -458,12 +456,7 @@ jobs:
       - name: Building WASM for cdd-c
         run: |
           set -e
-          cd cdd-c
-          sed -i 's/extern cdd_c_error_t serve_json_rpc_main/extern C_CDD_EXPORT cdd_c_error_t serve_json_rpc_main/g' src/functions/parse/main.c
-          sed -i 's/extern cdd_c_error_t serve_mcp_stdio_main/extern C_CDD_EXPORT cdd_c_error_t serve_mcp_stdio_main/g' src/functions/parse/main.c
-          sed -i 's/-DCMAKE_BUILD_TYPE=Release/-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS="-Wno-deprecated-declarations"/' Makefile
-          make build_wasm
-          cd ..
+          cd cdd-c && make build_wasm && cd ..
 
   wasm-build-cpp:
     runs-on: ubuntu-latest
@@ -498,10 +491,7 @@ jobs:
         run: |
           set -e
           sudo dotnet workload install wasm-tools wasm-tools-net8
-          cd cdd-csharp
-          sed -i '/HttpSpecServer/i #pragma warning disable CA1416' src/Cdd.OpenApi.Cli/CddCli.cs src/Cdd.OpenApi.Cli/Program.cs
-          make build_wasm
-          cd ..
+          cd cdd-csharp && make build_wasm && cd ..
 
   wasm-build-go:
     runs-on: ubuntu-latest

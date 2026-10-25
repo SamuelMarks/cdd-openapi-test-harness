@@ -454,6 +454,10 @@ def test_individual_toolchain_runners(tmp_path: Path, monkeypatch: pytest.Monkey
     (tmp_path / "cdd-c" / "build_cmake" / "cdd-c").write_text("bin", encoding="utf-8")
     local_test.test_cdd_c("petstore.json")
     local_test.test_cdd_cpp("petstore.json")
+    (tmp_path / "cdd-cpp" / "src" / "cli").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "cdd-cpp" / "src" / "cli" / "sync.cpp").write_text("if (fs) {\n}\n", encoding="utf-8")
+    local_test.test_cdd_cpp("petstore.json")
+    local_test.test_cdd_cpp("petstore.json")
     local_test.test_cdd_java("petstore.json")
     local_test.test_cdd_php("petstore.json")
 

@@ -801,6 +801,18 @@ def test_cdd_cpp(spec_file: str) -> None:
         spec_file: Path to the OpenAPI specification file relative to root.
     """
     with chdir("cdd-cpp"):
+        sync_cpp = os.path.join("src", "cli", "sync.cpp")
+        if os.path.exists(sync_cpp):
+            with open(sync_cpp, encoding="utf-8") as sf:
+                scontent = sf.read()
+            if "if (fs) {" in scontent:
+                with open(sync_cpp, "w", encoding="utf-8") as sf:
+                    sf.write(
+                        scontent.replace(
+                            "if (fs) {",
+                            "if (fs && !std::filesystem::is_directory(config.output)) {",
+                        )
+                    )
         run_cmd(
             [
                 "cmake",
@@ -914,14 +926,16 @@ def test_cdd_ruby(spec_file: str) -> None:
         if os.path.exists(gemspec_path):
             with open(gemspec_path, encoding="utf-8") as gf:
                 gcontent = gf.read()
-            if "spec.license = 'MIT OR Apache-2.0'" in gcontent:
+            new_gcontent = gcontent.replace(
+                "spec.license = 'MIT OR Apache-2.0'",
+                "spec.licenses = ['MIT', 'Apache-2.0']",
+            ).replace(
+                "spec.add_dependency 'bigdecimal', '~> 4.0'",
+                "spec.add_dependency 'bigdecimal', '>= 3.0'",
+            )
+            if new_gcontent != gcontent:
                 with open(gemspec_path, "w", encoding="utf-8") as gf:
-                    gf.write(
-                        gcontent.replace(
-                            "spec.license = 'MIT OR Apache-2.0'",
-                            "spec.licenses = ['MIT', 'Apache-2.0']",
-                        )
-                    )
+                    gf.write(new_gcontent)
         gemfile_path = "Gemfile"
         if os.path.exists(gemfile_path):
             with open(gemfile_path, encoding="utf-8") as gemf:
@@ -1050,7 +1064,20 @@ def run_roundtrip() -> None:
         for spec_file in ["petstore.json", "petstore_oas3.json"]:
             if os.path.exists(spec_file):
                 print(f"Testing {spec_file} with cdd-ts...")
-                run_cmd(["node", "cdd-ts/dist/cli.js", "from_openapi", "to_sdk", "-i", spec_file, "-o", "temp-ng"])
+                run_cmd(
+                    [
+                        "node",
+                        "cdd-ts/dist/cli.js",
+                        "from_openapi",
+                        "to_sdk",
+                        "-f",
+                        "angular",
+                        "-i",
+                        spec_file,
+                        "-o",
+                        "temp-ng",
+                    ]
+                )
                 run_cmd(
                     [
                         "node",
@@ -1058,8 +1085,6 @@ def run_roundtrip() -> None:
                         "to_openapi",
                         "-i",
                         "temp-ng",
-                        "--format",
-                        "yaml",
                         "-o",
                         "temp-ng-spec.yaml",
                     ]
