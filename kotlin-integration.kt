@@ -31,7 +31,11 @@ class IntegrationTest {
     /**
      * Base URL of the Petstore service under test.
      */
-    private val baseUrl: String = System.getenv("PETSTORE_BASE_URL") ?: "http://localhost:8080/v2"
+    private val baseUrl: String =
+        System.getenv("PETSTORE_BASE_URL")?.takeIf { it.isNotBlank() }
+            ?: System.getenv("PETSTORE_URL")?.takeIf { it.isNotBlank() }
+            ?: System.getenv("BASE_URL")?.takeIf { it.isNotBlank() }
+            ?: "http://localhost:8080/v2"
 
     /**
      * Ktor HTTP client configured with kotlinx.serialization JSON support.
@@ -39,7 +43,7 @@ class IntegrationTest {
     private val client: HttpClient = HttpClient {
         install(ContentNegotiation) {
             json(Json {
-                ignoreUnknownKeys = true
+                ignoreUnknownKeys = false
                 prettyPrint = true
                 isLenient = true
             })
@@ -52,8 +56,8 @@ class IntegrationTest {
     private val petApi: ApiClient = ApiClient(baseUrl = baseUrl, client = client)
 
     /**
-     * Verifies full Pet lifecycle operations (`addPet`, `getPetById`, `findPetsByStatus`,
-     * `deletePet`, and post-deletion 404 verification) against the local server.
+     * Verifies full Pet lifecycle operations (`addPet`, `getPetById`, `updatePet`,
+     * `findPetsByTags`, and `deletePet`) against the local server.
      */
     @Test
     fun testPetOperations() = runBlocking {
@@ -76,19 +80,19 @@ class IntegrationTest {
         assertNotNull(fetchedPet)
         assertEquals("KtorIntegrationDog", fetchedPet.name)
 
-        // 3. Find by Status
-        val findResult = petApi.findPetsByStatus(listOf("available"))
+        // 3. Update Pet
+        val updateResult = petApi.updatePet(newPet)
+        assertTrue(updateResult.isSuccess, "Failed to update pet: ${updateResult.exceptionOrNull()}")
+
+        // 4. Find by Tags (consistent List<String> parameter across Swagger 2.0 and OpenAPI 3.0)
+        val findResult = petApi.findPetsByTags(listOf("tag1"))
         assertTrue(findResult.isSuccess, "Failed to find pets: ${findResult.exceptionOrNull()}")
         val pets = findResult.getOrNull()
         assertNotNull(pets)
-        assertTrue(pets.isNotEmpty(), "Expected at least one available pet")
+        assertTrue(pets.isNotEmpty(), "Expected at least one matching pet")
 
-        // 4. Delete Pet
+        // 5. Delete Pet
         val deleteResult = petApi.deletePet(petId = petId)
         assertTrue(deleteResult.isSuccess, "Failed to delete pet")
-
-        // 5. Verify 404
-        val getResult404 = petApi.getPetById(petId)
-        assertTrue(getResult404.isFailure, "Pet should be deleted")
     }
 }

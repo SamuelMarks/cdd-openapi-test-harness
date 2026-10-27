@@ -617,7 +617,13 @@ def test_cdd_kotlin(spec_file: str) -> None:
     Args:
         spec_file: Path to the OpenAPI specification file relative to root.
     """
+    base_path = "/v2" if spec_file == "petstore.json" else "/api/v3"
     kt_env = _discover_kotlin_env()
+    kt_env["PETSTORE_BASE_URL"] = f"http://localhost:8080{base_path}"
+    kt_env["PETSTORE_URL"] = f"http://localhost:8080{base_path}"
+    kt_env["BASE_URL"] = f"http://localhost:8080{base_path}"
+    kt_env["ANDROID_HOME"] = ""
+    kt_env["ANDROID_SDK_ROOT"] = ""
     run_cmd(xcmd(["./gradlew", "compileKotlinJvm", "jvmTest"]), cwd="cdd-kotlin", env=kt_env)
     run_cmd(xcmd(["./gradlew", "jvmJar"]), cwd="cdd-kotlin", env=kt_env)
 
