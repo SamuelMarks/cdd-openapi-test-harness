@@ -142,4 +142,5 @@ def test_registry_runner_helpers(tmp_path: Path) -> None:
     with mock.patch("subprocess.run", side_effect=fake_run_ok):
         run_c_sdk_test_suite(str(c_dir), str(client_dir), str(spec_yaml))
     assert recorded_cmds[0] == ["make", "test"]
-    assert recorded_cmds[-1] == ["ctest", "--output-on-failure"]
+    assert recorded_cmds[1] == ["make", "build"]
+    assert recorded_cmds[-1] == ["ctest", "--output-on-failure", "--no-tests=ignore"]

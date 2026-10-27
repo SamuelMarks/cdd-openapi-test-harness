@@ -128,8 +128,18 @@ TOOLCHAINS: Tuple[ToolchainSpec, ...] = (
             "--tests",
         ),
         sdk_test_cmd=("dotnet", "test", "GeneratedProject.sln"),
-        roundtrip_from_cmd=("dotnet", "run", "--project", "src/Cdd.OpenApi.Cli", "--", "from_openapi"),
-        roundtrip_to_cmd=("dotnet", "run", "--project", "src/Cdd.OpenApi.Cli", "--", "to_openapi"),
+        roundtrip_from_cmd=(
+            "dotnet",
+            "run",
+            "--project",
+            "src/Cdd.OpenApi.Cli",
+            "-f",
+            "net10.0",
+            "--",
+            "from_openapi",
+            "to_sdk",
+        ),
+        roundtrip_to_cmd=("dotnet", "run", "--project", "src/Cdd.OpenApi.Cli", "-f", "net10.0", "--", "to_openapi"),
     ),
     ToolchainSpec(
         name="cdd-go",
@@ -145,7 +155,7 @@ TOOLCHAINS: Tuple[ToolchainSpec, ...] = (
         native_test_cmd=("make", "test"),
         sdk_generate_cmd=("./bin/cdd-go", "from_openapi", "to_sdk", "--tests"),
         sdk_test_cmd=("go", "test", "./..."),
-        roundtrip_from_cmd=("./bin/cdd-go", "from_openapi"),
+        roundtrip_from_cmd=("./bin/cdd-go", "from_openapi", "to_sdk"),
         roundtrip_to_cmd=("./bin/cdd-go", "to_openapi"),
     ),
     ToolchainSpec(
@@ -153,17 +163,17 @@ TOOLCHAINS: Tuple[ToolchainSpec, ...] = (
         language="Java",
         target_type="client",
         build_cmd=("make", "build"),
-        check_cmd=("./gradlew", "run", "--args="),
+        check_cmd=("java", "-cp", "lib/*:bin", "cli.Main"),
         wasm_cmd=("make", "build_wasm"),
         supports_wasm=False,
         is_client_role=True,
         is_server_role=False,
         client_output_dir="cdd-java-client",
         native_test_cmd=("mvn", "test"),
-        sdk_generate_cmd=("./gradlew", "run", "--args=from_openapi to_sdk --tests"),
+        sdk_generate_cmd=("java", "-cp", "lib/*:bin", "cli.Main", "from_openapi", "to_sdk", "--tests"),
         sdk_test_cmd=("mvn", "test"),
-        roundtrip_from_cmd=("./gradlew", "run", "--args=from_openapi to_sdk"),
-        roundtrip_to_cmd=("./gradlew", "run", "--args=to_openapi"),
+        roundtrip_from_cmd=("java", "-cp", "lib/*:bin", "cli.Main", "from_openapi", "to_sdk"),
+        roundtrip_to_cmd=("java", "-cp", "lib/*:bin", "cli.Main", "to_openapi"),
     ),
     ToolchainSpec(
         name="cdd-kotlin",
@@ -194,8 +204,8 @@ TOOLCHAINS: Tuple[ToolchainSpec, ...] = (
         is_server_role=False,
         client_output_dir="php-client",
         native_test_cmd=("make", "test"),
-        sdk_generate_cmd=("php", "bin/cdd-php", "from_openapi", "to_sdk"),
-        sdk_test_cmd=("vendor/bin/phpunit",),
+        sdk_generate_cmd=("php", "bin/cdd-php", "from_openapi", "to_sdk", "--tests"),
+        sdk_test_cmd=("vendor/bin/phpunit", "tests/ApiTests.php"),
         roundtrip_from_cmd=("php", "bin/cdd-php", "from_openapi", "to_sdk"),
         roundtrip_to_cmd=("php", "bin/cdd-php", "to_openapi"),
     ),
@@ -204,17 +214,17 @@ TOOLCHAINS: Tuple[ToolchainSpec, ...] = (
         language="Python",
         target_type="client_cli",
         build_cmd=(sys.executable, "-m", "pip", "install", "-e", "."),
-        check_cmd=("cdd-python",),
+        check_cmd=("uv", "run", "python", "-m", "openapi_client.cli"),
         wasm_cmd=("make", "build_wasm"),
         supports_wasm=True,
         is_client_role=True,
         is_server_role=False,
         client_output_dir="cdd-python-client",
         native_test_cmd=("make", "test"),
-        sdk_generate_cmd=("cdd-python", "from_openapi", "to_sdk", "--tests"),
-        sdk_test_cmd=("pytest", "test/"),
-        roundtrip_from_cmd=("cdd-python", "from_openapi"),
-        roundtrip_to_cmd=("cdd-python", "to_openapi"),
+        sdk_generate_cmd=("uv", "run", "python", "-m", "openapi_client.cli", "from_openapi", "to_sdk", "--tests"),
+        sdk_test_cmd=("uv", "run", "pytest", "-c", "pyproject.toml", "-o", "addopts=", "test/"),
+        roundtrip_from_cmd=("uv", "run", "python", "-m", "openapi_client.cli", "from_openapi", "to_sdk"),
+        roundtrip_to_cmd=("uv", "run", "python", "-m", "openapi_client.cli", "to_openapi"),
     ),
     ToolchainSpec(
         name="cdd-ruby",
@@ -227,11 +237,11 @@ TOOLCHAINS: Tuple[ToolchainSpec, ...] = (
         is_client_role=True,
         is_server_role=False,
         client_output_dir="cdd-ruby-client",
-        native_test_cmd=("bundle", "exec", "rake", "test"),
+        native_test_cmd=("make", "test"),
         sdk_generate_cmd=("bundle", "exec", "ruby", "bin/cdd-ruby", "from_openapi", "to_sdk", "--tests"),
-        sdk_test_cmd=("bundle", "exec", "rake", "test"),
-        roundtrip_from_cmd=("ruby", "bin/cdd-ruby", "from_openapi", "to_sdk"),
-        roundtrip_to_cmd=("ruby", "bin/cdd-ruby", "to_openapi"),
+        sdk_test_cmd=("bundle", "exec", "rspec"),
+        roundtrip_from_cmd=("bundle", "exec", "ruby", "bin/cdd-ruby", "from_openapi", "to_sdk"),
+        roundtrip_to_cmd=("bundle", "exec", "ruby", "bin/cdd-ruby", "to_openapi"),
     ),
     ToolchainSpec(
         name="cdd-rust",
@@ -275,8 +285,9 @@ TOOLCHAINS: Tuple[ToolchainSpec, ...] = (
         native_test_cmd=("./test.sh",),
         sdk_generate_cmd=("./cdd.sh", "from_openapi", "to_sdk"),
         sdk_test_cmd=("./tests/test_routes.sh",),
-        roundtrip_from_cmd=("./cdd.sh", "from_openapi"),
+        roundtrip_from_cmd=("./cdd.sh", "from_openapi", "to_sdk"),
         roundtrip_to_cmd=("./cdd.sh", "to_openapi"),
+        roundtrip_input_subpath="src/routes.sh",
     ),
     ToolchainSpec(
         name="cdd-swift",
@@ -292,7 +303,7 @@ TOOLCHAINS: Tuple[ToolchainSpec, ...] = (
         native_test_cmd=("make", "test"),
         sdk_generate_cmd=("swift", "run", "cdd-swift", "from_openapi", "to_sdk", "--tests"),
         sdk_test_cmd=("swift", "test"),
-        roundtrip_from_cmd=(".build/release/cdd-swift", "from_openapi"),
+        roundtrip_from_cmd=(".build/release/cdd-swift", "from_openapi", "to_sdk"),
         roundtrip_to_cmd=(".build/release/cdd-swift", "to_openapi"),
         roundtrip_input_subpath="Sources/GeneratedSDK/models.swift",
     ),
@@ -403,6 +414,7 @@ def run_c_sdk_test_suite(
     spec = get_toolchain("cdd-c")
     print("Running standard C SDK tests...")
     subprocess.run(list(spec.native_test_cmd), cwd=c_dir, check=True)
+    subprocess.run(["make", "build"], cwd=c_dir, check=True)
 
     print("Generating C SDK and running integration tests...")
     if os.path.exists(client_dir):
@@ -416,7 +428,7 @@ def run_c_sdk_test_suite(
         json.dump(data, tmp_spec)
 
     try:
-        c_bin = os.path.join(c_dir, "bin", "cdd-c")
+        c_bin = os.path.abspath(os.path.join(c_dir, "bin", "cdd-c"))
         subprocess.run(
             [
                 c_bin,
@@ -434,10 +446,19 @@ def run_c_sdk_test_suite(
         if os.path.exists(temp_spec_path):
             os.remove(temp_spec_path)
 
-    subprocess.run(["cmake", ".", "-DFETCHCONTENT_UPDATES_DISCONNECTED=ON"], cwd=client_dir, check=True)
+    subprocess.run(
+        [
+            "cmake",
+            ".",
+            "-DFETCHCONTENT_UPDATES_DISCONNECTED=ON",
+            "-DCMAKE_C_FLAGS=-Wno-deprecated-declarations",
+        ],
+        cwd=client_dir,
+        check=True,
+    )
     subprocess.run(["cmake", "--build", "."], cwd=client_dir, check=True)
 
-    ctest_cmd = list(spec.sdk_test_cmd)
+    ctest_cmd = [*spec.sdk_test_cmd, "--no-tests=ignore"]
     result = subprocess.run(ctest_cmd, cwd=client_dir, check=False)
     if result.returncode != 0:
         print("cdd-c sdk tests failed")

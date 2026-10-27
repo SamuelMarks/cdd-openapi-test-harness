@@ -509,9 +509,11 @@ def test_individual_toolchain_runners(tmp_path: Path, monkeypatch: pytest.Monkey
     monkeypatch.chdir(tmp_path)
     (tmp_path / "petstore.json").write_text('{"openapi": "3.0.0"}', encoding="utf-8")
     (tmp_path / "kotlin-integration.kt").write_text("// kotlin test", encoding="utf-8")
+    (tmp_path / "ts-morph").mkdir(exist_ok=True)
 
     for spec in get_toolchains():
         (tmp_path / spec.name).mkdir(exist_ok=True)
+    (tmp_path / "cdd-php" / "composer.lock").write_text("{}", encoding="utf-8")
 
     recorded_cmds: List[Tuple[List[str], Optional[str]]] = []
     create_clients = [True]
@@ -545,8 +547,12 @@ def test_individual_toolchain_runners(tmp_path: Path, monkeypatch: pytest.Monkey
                 "sh-client",
             ):
                 (tmp_path / c_dir).mkdir(exist_ok=True)
-            if "node-client" in c:
-                (tmp_path / "cdd-ts" / "node-client").mkdir(parents=True, exist_ok=True)
+            if "../node-client" in c:
+                nc_src = tmp_path / "node-client" / "src"
+                nc_src.mkdir(parents=True, exist_ok=True)
+                (nc_src / "integration.spec.ts").write_text("// ts test", encoding="utf-8")
+            if cwd == "cdd-kotlin":
+                (tmp_path / "kotlin-client" / "gradlew").write_text("#!/bin/sh", encoding="utf-8")
             if cwd == "cdd-sh" and "from_openapi" in c:
                 routes_dir = tmp_path / "sh-client" / "tests"
                 routes_dir.mkdir(parents=True, exist_ok=True)
@@ -557,7 +563,6 @@ def test_individual_toolchain_runners(tmp_path: Path, monkeypatch: pytest.Monkey
         mock.patch("local_test.run_cmd", side_effect=fake_run_cmd),
         mock.patch("local_test.build_typescript_toolchain", return_value=None),
         mock.patch("local_test.run_typescript_toolchain_tests", return_value=None),
-        mock.patch("local_test.run_c_sdk_test_suite", return_value=None),
     ):
         local_test.test_cdd_ts("petstore.json")
         assert any(c == ["npx", "vitest", "run", "src/integration.spec.ts"] for c, _ in recorded_cmds)
@@ -575,7 +580,23 @@ def test_individual_toolchain_runners(tmp_path: Path, monkeypatch: pytest.Monkey
         )
 
         local_test.test_cdd_python_all("petstore.json")
-        assert any(c == ["pytest", "test/"] and cwd == "cdd-python-client" for c, cwd in recorded_cmds)
+        assert any(
+            c
+            == [
+                "uv",
+                "run",
+                "--project",
+                "../cdd-python-all",
+                "pytest",
+                "-c",
+                "pyproject.toml",
+                "-o",
+                "addopts=",
+                "test/",
+            ]
+            and cwd == "cdd-python-client"
+            for c, cwd in recorded_cmds
+        )
 
         local_test.test_cdd_rust("petstore.json")
         assert any(c == ["cargo", "test"] and cwd == "cdd-rust-client" for c, cwd in recorded_cmds)
@@ -595,10 +616,16 @@ def test_individual_toolchain_runners(tmp_path: Path, monkeypatch: pytest.Monkey
         assert any(c == ["mvn", "test"] and cwd == "cdd-java-client" for c, cwd in recorded_cmds)
 
         local_test.test_cdd_php("petstore.json")
-        assert any(c == ["vendor/bin/phpunit"] and cwd == "php-client" for c, cwd in recorded_cmds)
+        assert not (tmp_path / "cdd-php" / "composer.lock").exists()
+        assert any(
+            c == ["vendor/bin/phpunit", "tests/ApiTests.php"] and cwd == "php-client" for c, cwd in recorded_cmds
+        )
 
         local_test.test_cdd_ruby("petstore.json")
-        assert any(c == ["bundle", "exec", "rake", "test"] and cwd == "cdd-ruby-client" for c, cwd in recorded_cmds)
+        assert any(
+            c == ["bundle", "exec", "rspec", "../cdd-ruby-client/spec/integration_spec.rb"] and cwd == "cdd-ruby"
+            for c, cwd in recorded_cmds
+        )
 
         src_sub = tmp_path / "cdd-sh" / "src" / "sub"
         src_sub.mkdir(parents=True, exist_ok=True)
@@ -611,27 +638,13 @@ def test_individual_toolchain_runners(tmp_path: Path, monkeypatch: pytest.Monkey
 
         create_clients[0] = False
         (tmp_path / "kotlin-integration.kt").unlink()
-        for c_dir in (
-            "angular-client",
-            "kotlin-client",
-            "cdd-go-client",
-            "cdd-csharp-client",
-            "cdd-python-client",
-            "cdd-rust-client",
-            "cdd-swift-client",
-            "cdd-cpp-client",
-            "cdd-java-client",
-            "php-client",
-            "cdd-ruby-client",
-            "sh-client",
-        ):
-            if (tmp_path / c_dir).exists():
-                (tmp_path / c_dir).rmdir() if not list((tmp_path / c_dir).iterdir()) else None
+        (tmp_path / "ts-morph" / "packages" / "ts-morph" / "dist").mkdir(parents=True, exist_ok=True)
 
         import shutil as _shutil
 
         for c_dir in (
             "angular-client",
+            "node-client",
             "kotlin-client",
             "cdd-go-client",
             "cdd-csharp-client",
@@ -645,7 +658,6 @@ def test_individual_toolchain_runners(tmp_path: Path, monkeypatch: pytest.Monkey
             "sh-client",
         ):
             _shutil.rmtree(tmp_path / c_dir, ignore_errors=True)
-        _shutil.rmtree(tmp_path / "cdd-ts" / "node-client", ignore_errors=True)
 
         local_test.test_cdd_ts("petstore.json")
         local_test.test_cdd_kotlin("petstore.json")

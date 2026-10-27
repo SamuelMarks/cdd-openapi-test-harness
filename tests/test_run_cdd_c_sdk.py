@@ -44,9 +44,10 @@ def test_run_c_sdk_suite_success_and_failure(tmp_path: Path) -> None:
             client_dir=str(client_dir),
             spec_yaml=str(spec_yaml),
         )
-    assert len(calls) == 5
+    assert len(calls) == 6
     assert calls[0] == ["make", "test"]
-    assert calls[-1] == ["ctest", "--output-on-failure"]
+    assert calls[1] == ["make", "build"]
+    assert calls[-1] == ["ctest", "--output-on-failure", "--no-tests=ignore"]
 
     def fake_run_fail_ctest(
         cmd: List[str],

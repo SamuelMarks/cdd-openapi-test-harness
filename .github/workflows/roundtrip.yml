@@ -198,9 +198,9 @@ jobs:
               filename=$(basename "$file")
               echo "Testing $filename with cdd-sh..."
               python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > temp-sh-spec.json
-              ./cdd.sh from_openapi -i temp-sh-spec.json -o temp-routes.sh
-              ./cdd.sh to_openapi -i temp-routes.sh -o temp-sh-out.json
-              rm -f temp-sh-spec.json temp-routes.sh temp-sh-out.json ast.json
+              ./cdd.sh from_openapi to_sdk -i temp-sh-spec.json -o temp-routes
+              ./cdd.sh to_openapi -i temp-routes/src/routes.sh -o temp-sh-out.json
+              rm -rf temp-sh-spec.json temp-routes temp-sh-out.json ast.json
           done
           cd ..
 
@@ -339,8 +339,8 @@ jobs:
               echo "Testing file with cdd-java..."
               mkdir -p ../temp-java
               python -c "import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout)" < "$file" > ../temp-java-spec.json
-              ./gradlew run --args="from_openapi to_sdk -i ../temp-java-spec.json -o ../temp-java"
-              ./gradlew run --args="to_openapi -i ../temp-java -o ../temp-java/spec.yaml"
+              java -cp "lib/*:bin" cli.Main from_openapi to_sdk -i ../temp-java-spec.json -o ../temp-java
+              java -cp "lib/*:bin" cli.Main to_openapi -i ../temp-java -o ../temp-java/spec.yaml
               rm -rf ../temp-java ../temp-java-spec.json
           done
 

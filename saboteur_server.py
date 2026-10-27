@@ -80,7 +80,7 @@ def build_petstore_payload(method: str, req_path: str) -> bytes:
         ).encode("utf-8")
     if path.endswith("/user/login"):
         return json.dumps("logged_in_session").encode("utf-8")
-    if "/user/" in path and method == "GET":
+    if (path.endswith("/user") or "/user/" in path) and not path.endswith("/user/logout") and method != "DELETE":
         return json.dumps(
             {
                 "id": 1,

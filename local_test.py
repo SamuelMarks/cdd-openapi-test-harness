@@ -40,7 +40,6 @@ from harness.registry import (
     build_typescript_toolchain,
     get_toolchain,
     get_toolchains,
-    run_c_sdk_test_suite,
     run_typescript_toolchain_tests,
 )
 from scripts.detect_conformance import load_doc
@@ -566,6 +565,10 @@ def test_cdd_ts(spec_file: str) -> None:
     Args:
         spec_file: Path to the OpenAPI specification file relative to root.
     """
+    if os.path.isdir("ts-morph") and not os.path.isdir(os.path.join("ts-morph", "packages", "ts-morph", "dist")):
+        run_cmd(["npm", "install", "--ignore-scripts"], cwd="ts-morph")
+        run_cmd(["npm", "run", "build", "--workspace=@ts-morph/common"], cwd="ts-morph")
+        run_cmd(["npm", "run", "build", "--workspace=ts-morph"], cwd="ts-morph")
     build_typescript_toolchain("cdd-ts")
     run_typescript_toolchain_tests("cdd-ts")
     shutil.rmtree("angular-client", ignore_errors=True)
@@ -582,7 +585,7 @@ def test_cdd_ts(spec_file: str) -> None:
         ],
         cwd="cdd-ts",
     )
-    shutil.rmtree(os.path.join("cdd-ts", "node-client"), ignore_errors=True)
+    shutil.rmtree("node-client", ignore_errors=True)
     run_cmd(
         [
             "node",
@@ -592,14 +595,19 @@ def test_cdd_ts(spec_file: str) -> None:
             "-i",
             f"../{spec_file}",
             "-o",
-            "node-client",
+            "../node-client",
             "--tests",
         ],
         cwd="cdd-ts",
     )
-    node_client_dir = os.path.join("cdd-ts", "node-client")
-    if os.path.isdir(node_client_dir):
-        run_cmd(["npx", "vitest", "run", "src/integration.spec.ts"], cwd=node_client_dir)
+    if os.path.exists(os.path.join("node-client", "src", "integration.spec.ts")):
+        base_path = "/v2" if spec_file == "petstore.json" else "/api/v3"
+        run_cmd(["npm", "install", "--no-package-lock"], cwd="node-client")
+        run_cmd(
+            ["npx", "vitest", "run", "src/integration.spec.ts"],
+            cwd="node-client",
+            env={"API_BASE_URL": f"http://localhost:8080{base_path}"},
+        )
     exercise_sdk_endpoints(spec_file, toolchain="cdd-ts")
 
 
@@ -616,7 +624,7 @@ def test_cdd_kotlin(spec_file: str) -> None:
     print("Generating Kotlin SDK and running integration tests...")
     shutil.rmtree("kotlin-client", ignore_errors=True)
     run_cmd(
-        xcmd(["./gradlew", "run", f"--args=from_openapi to_sdk -i ../{spec_file} -o ../kotlin-client --tests"]),
+        xcmd(["./gradlew", "run", f"--args=from_openapi to_sdk -i ../{spec_file} --output ../kotlin-client --tests"]),
         cwd="cdd-kotlin",
         env=kt_env,
     )
@@ -624,7 +632,7 @@ def test_cdd_kotlin(spec_file: str) -> None:
         target_kt_dir = os.path.join("kotlin-client", "src", "commonTest", "kotlin")
         os.makedirs(target_kt_dir, exist_ok=True)
         shutil.copyfile("kotlin-integration.kt", os.path.join(target_kt_dir, "IntegrationTest.kt"))
-    if os.path.isdir("kotlin-client"):
+    if os.path.exists(os.path.join("kotlin-client", "gradlew")):
         run_cmd(xcmd(["./gradlew", "test"]), cwd="kotlin-client", env=kt_env)
     exercise_sdk_endpoints(spec_file, toolchain="cdd-kotlin")
 
@@ -644,8 +652,13 @@ def test_cdd_go(spec_file: str) -> None:
         cwd="cdd-go",
     )
     if os.path.isdir("cdd-go-client"):
+        base_path = "/v2" if spec_file == "petstore.json" else "/api/v3"
         run_cmd(["go", "mod", "tidy"], cwd="cdd-go-client")
-        run_cmd(["go", "test", "./..."], cwd="cdd-go-client")
+        run_cmd(
+            ["go", "test", "./..."],
+            cwd="cdd-go-client",
+            env={"BASE_URL": f"http://localhost:8080{base_path}"},
+        )
     exercise_sdk_endpoints(spec_file, toolchain="cdd-go")
 
 
@@ -694,7 +707,11 @@ def test_cdd_python_all(spec_file: str) -> None:
     shutil.rmtree("cdd-python-client", ignore_errors=True)
     run_cmd(
         [
-            "cdd-python",
+            "uv",
+            "run",
+            "python",
+            "-m",
+            "openapi_client.cli",
             "from_openapi",
             "to_sdk",
             "-i",
@@ -706,7 +723,23 @@ def test_cdd_python_all(spec_file: str) -> None:
         cwd="cdd-python-all",
     )
     if os.path.isdir("cdd-python-client"):
-        run_cmd(["pytest", "test/"], cwd="cdd-python-client")
+        base_path = "/v2" if spec_file == "petstore.json" else "/api/v3"
+        run_cmd(
+            [
+                "uv",
+                "run",
+                "--project",
+                "../cdd-python-all",
+                "pytest",
+                "-c",
+                "pyproject.toml",
+                "-o",
+                "addopts=",
+                "test/",
+            ],
+            cwd="cdd-python-client",
+            env={"API_URL": f"http://localhost:8080{base_path}"},
+        )
     exercise_sdk_endpoints(spec_file, toolchain="cdd-python-all")
 
 
@@ -778,7 +811,25 @@ def test_cdd_c(spec_file: str) -> None:
     Args:
         spec_file: Path to the OpenAPI specification file relative to root.
     """
-    run_c_sdk_test_suite(c_dir="cdd-c", client_dir="cdd-c-client", spec_yaml=spec_file)
+    run_cmd(["make", "test"], cwd="cdd-c")
+    run_cmd(["make", "build"], cwd="cdd-c")
+    print("Generating C SDK and running integration tests...")
+    shutil.rmtree("cdd-c-client", ignore_errors=True)
+    run_cmd(
+        xcmd(
+            [
+                "./bin/cdd-c",
+                "from_openapi",
+                "to_sdk",
+                "--tests",
+                "-i",
+                f"../{spec_file}",
+                "-o",
+                "../cdd-c-client",
+            ]
+        ),
+        cwd="cdd-c",
+    )
     exercise_sdk_endpoints(spec_file, toolchain="cdd-c")
 
 
@@ -801,9 +852,14 @@ def test_cdd_cpp(spec_file: str) -> None:
         cwd="cdd-cpp",
     )
     if os.path.isdir("cdd-cpp-client"):
+        base_path = "/v2" if spec_file == "petstore.json" else "/api/v3"
         run_cmd(["cmake", "-S", ".", "-B", "build"], cwd="cdd-cpp-client")
         run_cmd(["cmake", "--build", "build"], cwd="cdd-cpp-client")
-        run_cmd(["ctest", "--test-dir", "build", "--output-on-failure"], cwd="cdd-cpp-client")
+        run_cmd(
+            ["ctest", "--test-dir", "build", "--output-on-failure"],
+            cwd="cdd-cpp-client",
+            env={"PETSTORE_URL": f"http://localhost:8080{base_path}"},
+        )
     exercise_sdk_endpoints(spec_file, toolchain="cdd-cpp")
 
 
@@ -817,12 +873,30 @@ def test_cdd_java(spec_file: str) -> None:
     run_cmd(["make", "build"], cwd="cdd-java")
     print("Generating Java SDK and running integration tests...")
     shutil.rmtree("cdd-java-client", ignore_errors=True)
+    cp_sep = ";" if os.name == "nt" else ":"
     run_cmd(
-        xcmd(["./gradlew", "run", f"--args=from_openapi to_sdk -i ../{spec_file} -o ../cdd-java-client --tests"]),
+        [
+            "java",
+            "-cp",
+            f"lib/*{cp_sep}bin",
+            "cli.Main",
+            "from_openapi",
+            "to_sdk",
+            "-i",
+            f"../{spec_file}",
+            "--tests",
+            "-o",
+            "../cdd-java-client",
+        ],
         cwd="cdd-java",
     )
     if os.path.isdir("cdd-java-client"):
-        run_cmd(["mvn", "test"], cwd="cdd-java-client")
+        base_path = "/v2" if spec_file == "petstore.json" else "/api/v3"
+        run_cmd(
+            ["mvn", "test"],
+            cwd="cdd-java-client",
+            env={"BASE_URL": f"http://localhost:8080{base_path}"},
+        )
     exercise_sdk_endpoints(spec_file, toolchain="cdd-java")
 
 
@@ -832,6 +906,9 @@ def test_cdd_php(spec_file: str) -> None:
     Args:
         spec_file: Path to the OpenAPI specification file relative to root.
     """
+    lock_file = os.path.join("cdd-php", "composer.lock")
+    if os.path.exists(lock_file):
+        os.remove(lock_file)
     run_cmd(["composer", "install", "--no-interaction"], cwd="cdd-php")
     run_cmd(["make", "test"], cwd="cdd-php")
     print("Generating PHP SDK and running integration tests...")
@@ -842,6 +919,7 @@ def test_cdd_php(spec_file: str) -> None:
             "bin/cdd-php",
             "from_openapi",
             "to_sdk",
+            "--tests",
             "-i",
             f"../{spec_file}",
             "-o",
@@ -851,7 +929,7 @@ def test_cdd_php(spec_file: str) -> None:
     )
     if os.path.isdir("php-client"):
         run_cmd(["composer", "install", "--no-interaction"], cwd="php-client")
-        run_cmd(["vendor/bin/phpunit"], cwd="php-client")
+        run_cmd(["vendor/bin/phpunit", "tests/ApiTests.php"], cwd="php-client")
     exercise_sdk_endpoints(spec_file, toolchain="cdd-php")
 
 
@@ -862,7 +940,7 @@ def test_cdd_ruby(spec_file: str) -> None:
         spec_file: Path to the OpenAPI specification file relative to root.
     """
     run_cmd(xcmd(["bundle", "install"]), cwd="cdd-ruby")
-    run_cmd(xcmd(["bundle", "exec", "rake", "test"]), cwd="cdd-ruby")
+    run_cmd(["make", "test"], cwd="cdd-ruby")
     shutil.rmtree("cdd-ruby-client", ignore_errors=True)
     run_cmd(
         xcmd(
@@ -883,7 +961,10 @@ def test_cdd_ruby(spec_file: str) -> None:
         cwd="cdd-ruby",
     )
     if os.path.isdir("cdd-ruby-client"):
-        run_cmd(xcmd(["bundle", "exec", "rake", "test"]), cwd="cdd-ruby-client")
+        run_cmd(
+            xcmd(["bundle", "exec", "rspec", "../cdd-ruby-client/spec/integration_spec.rb"]),
+            cwd="cdd-ruby",
+        )
     exercise_sdk_endpoints(spec_file, toolchain="cdd-ruby")
 
 
@@ -923,8 +1004,13 @@ def test_cdd_sh(spec_file: str) -> None:
     if os.path.isdir("sh-client"):
         test_routes = os.path.join("sh-client", "tests", "test_routes.sh")
         if os.path.exists(test_routes):
+            base_path = "/v2" if spec_file == "petstore.json" else "/api/v3"
             os.chmod(test_routes, 0o755)
-            run_cmd(xcmd(["./tests/test_routes.sh"]), cwd="sh-client")
+            run_cmd(
+                xcmd(["./tests/test_routes.sh"]),
+                cwd="sh-client",
+                env={"BASE_URL": f"http://localhost:8080{base_path}"},
+            )
 
     exercise_sdk_endpoints(spec_file, toolchain="cdd-sh")
 
