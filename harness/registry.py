@@ -321,7 +321,7 @@ TOOLCHAINS: Tuple[ToolchainSpec, ...] = (
         native_test_cmd=("npm", "run", "test", "--run"),
         sdk_generate_cmd=("node", "dist/cli.js", "from_openapi", "to_sdk", "--tests"),
         sdk_test_cmd=("npx", "vitest", "run", "src/integration.spec.ts"),
-        roundtrip_from_cmd=("node", "dist/cli.js", "from_openapi", "to_sdk", "-f", "angular"),
+        roundtrip_from_cmd=("node", "dist/cli.js", "from_openapi", "to_sdk"),
         roundtrip_to_cmd=("node", "dist/cli.js", "to_openapi"),
     ),
 )
