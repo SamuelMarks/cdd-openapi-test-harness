@@ -29,6 +29,8 @@ from harness.registry import (
     run_typescript_toolchain_tests,
 )
 
+__version__ = "0.0.4"
+
 __all__ = [
     "TOOLCHAINS",
     "AuditFailureError",
@@ -44,6 +46,7 @@ __all__ = [
     "JSONValue",
     "SpecificationError",
     "ToolchainSpec",
+    "__version__",
     "build_typescript_toolchain",
     "get_toolchain",
     "get_toolchains",

@@ -18,6 +18,7 @@ from harness import (
     HarnessError,
     SpecificationError,
     ToolchainSpec,
+    __version__,
     build_typescript_toolchain,
     get_toolchain,
     get_toolchains,
@@ -28,6 +29,7 @@ from harness import (
 
 def test_harness_error_hierarchy() -> None:
     """Verify all custom exception classes in `harness.errors` initialize attributes and codes."""
+    assert __version__ == "0.0.4"
     base_err = HarnessError("base failure", code=2)
     assert base_err.message == "base failure"
     assert base_err.code == 2
